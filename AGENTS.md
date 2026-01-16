@@ -1,5 +1,18 @@
 # Agent Instructions
 
+## About This Project
+
+**Wiktionary Dictionary App** - A cross-platform dictionary app using Wiktionary data.
+
+- **Rust core**: SQLite database with FTS5 search, exposed via C FFI
+- **Android UI**: Jetpack Compose with JNI bindings to Rust
+- **Data**: Preprocessed from kaikki.org Wiktionary dumps
+- **Features**: Fast offline search, text selection integration (ACTION_PROCESS_TEXT), first-launch database download
+
+Architecture details in `ARCHITECTURE.md`.
+
+---
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
