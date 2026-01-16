@@ -1,0 +1,42 @@
+# Core Rust library for the Wiktionary Dictionary App
+#
+# This crate provides:
+# - SQLite database operations
+# - Full-text search (FTS5)
+# - Data models for dictionary entries
+# - JSONL import functionality
+# - C FFI exports for cross-platform use
+
+[package]
+name = "dict-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+# Database
+rusqlite.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+
+# JNI (for Android)
+jni.workspace = true
+
+# Logging
+log.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.14"
+
+[dev-dependencies]
+tempfile.workspace = true

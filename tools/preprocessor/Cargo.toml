@@ -1,0 +1,35 @@
+# Preprocessor tool for converting Wiktionary JSONL to SQLite
+#
+# This is a build-time tool that converts raw Wiktionary data
+# into optimized SQLite databases for the dictionary app.
+#
+# Usage:
+#   cargo run -p dict-preprocessor -- --input data.jsonl --output dict.db
+
+[package]
+name = "dict-preprocessor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dict-preprocessor"
+path = "src/main.rs"
+
+[dependencies]
+# Reuse core library for import functionality
+dict_core = { package = "dict-core", path = "../../core" }
+
+# CLI parsing
+clap = { version = "4.0", features = ["derive"] }
+
+# Error handling
+anyhow.workspace = true
+
+# Progress bars
+indicatif = "0.17"
+
+# Logging
+log.workspace = true
+env_logger = "0.11"
