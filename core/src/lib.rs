@@ -30,6 +30,7 @@ pub mod search;
 use std::sync::Arc;
 use thiserror::Error;
 
+pub use import::ImportStats;
 pub use models::{Definition, FullDefinition, Pronunciation, SearchResult, Translation, Word};
 
 /// Errors that can occur in dict-core operations
@@ -150,10 +151,12 @@ pub fn get_definition(handle: &DictHandle, word_id: i64) -> Option<FullDefinitio
 /// into the SQLite database. This is typically used during the build process
 /// to create the dictionary database from Wiktionary data.
 ///
+/// Supports both raw JSONL and gzip-compressed files (.jsonl.gz).
+///
 /// # Arguments
 ///
 /// * `db_path` - Path to the SQLite database file (will be created if needed)
-/// * `jsonl_path` - Path to the JSONL source file
+/// * `jsonl_path` - Path to the JSONL source file (can be .jsonl or .jsonl.gz)
 /// * `progress` - Callback function receiving (current_line, total_lines)
 ///
 /// # Returns
@@ -177,6 +180,30 @@ pub fn import_jsonl(
     progress: impl Fn(u64, u64),
 ) -> Result<()> {
     import::import_from_jsonl(db_path, jsonl_path, progress)
+}
+
+/// Import JSONL data into the dictionary database and return statistics
+///
+/// Same as `import_jsonl` but returns detailed import statistics.
+///
+/// # Example
+///
+/// ```ignore
+/// let stats = dict_core::import_jsonl_with_stats(
+///     "/path/to/output.db",
+///     "/path/to/wiktionary.jsonl.gz",
+///     |current, total| {
+///         println!("Progress: {}/{}", current, total);
+///     },
+/// )?;
+/// println!("Imported {} words with {} definitions", stats.words_imported, stats.definitions_imported);
+/// ```
+pub fn import_jsonl_with_stats(
+    db_path: &str,
+    jsonl_path: &str,
+    progress: impl Fn(u64, u64),
+) -> Result<ImportStats> {
+    import::import_from_jsonl_with_stats(db_path, jsonl_path, progress)
 }
 
 #[cfg(test)]
