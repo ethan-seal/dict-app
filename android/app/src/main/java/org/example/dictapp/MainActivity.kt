@@ -1,5 +1,6 @@
 package org.example.dictapp
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,11 +36,17 @@ import org.example.dictapp.viewmodel.DictViewModel
  *
  * This activity hosts the Compose navigation and manages the app lifecycle.
  * The app follows a single-activity architecture with Compose Navigation.
+ *
+ * Can be launched with an optional search word via [DefineWordActivity.EXTRA_SEARCH_WORD]
+ * to immediately search for a word when coming from the text selection flow.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Extract search word from intent (if launched from DefineWordActivity)
+        val initialSearchWord = intent?.getStringExtra(DefineWordActivity.EXTRA_SEARCH_WORD)
 
         setContent {
             DictAppTheme {
@@ -47,10 +54,17 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DictApp()
+                    DictApp(initialSearchWord = initialSearchWord)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle new intent when activity is re-launched
+        // This is needed when FLAG_ACTIVITY_CLEAR_TOP is used
+        setIntent(intent)
     }
 }
 
@@ -67,9 +81,13 @@ object Routes {
 
 /**
  * Main app composable with navigation.
+ *
+ * @param initialSearchWord Optional word to search for on launch (from text selection)
+ * @param viewModel The ViewModel instance
  */
 @Composable
 fun DictApp(
+    initialSearchWord: String? = null,
     viewModel: DictViewModel = viewModel()
 ) {
     val navController = rememberNavController()
@@ -83,6 +101,13 @@ fun DictApp(
     LaunchedEffect(isDatabaseReady) {
         startDestination = if (isDatabaseReady) Routes.SEARCH else Routes.DOWNLOAD
         startDestinationDetermined = true
+    }
+
+    // Set initial search query if provided (from DefineWordActivity)
+    LaunchedEffect(initialSearchWord, isDatabaseReady) {
+        if (isDatabaseReady && !initialSearchWord.isNullOrBlank()) {
+            viewModel.onQueryChange(initialSearchWord)
+        }
     }
 
     // Show loading while determining start destination
