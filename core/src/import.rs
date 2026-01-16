@@ -83,7 +83,7 @@ pub fn import_from_jsonl(
         };
 
         // Import the entry
-        if let Err(_) = import_entry(&conn, &entry) {
+        if import_entry(&conn, &entry).is_err() {
             errors += 1;
         }
 

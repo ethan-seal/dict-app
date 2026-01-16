@@ -30,7 +30,7 @@ pub mod search;
 use std::sync::Arc;
 use thiserror::Error;
 
-pub use models::{Definition, FullDefinition, Pronunciation, SearchResult, Translation};
+pub use models::{Definition, FullDefinition, Pronunciation, SearchResult, Translation, Word};
 
 /// Errors that can occur in dict-core operations
 #[derive(Error, Debug)]

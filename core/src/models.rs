@@ -19,6 +19,26 @@ pub struct SearchResult {
     pub pos: String,
     /// Preview text (first definition, truncated)
     pub preview: String,
+    /// Relevance score (lower is better, 0 = exact match)
+    #[serde(default)]
+    pub score: f64,
+}
+
+/// A word entry from the database
+///
+/// Represents the basic word record without definitions or other related data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Word {
+    /// Unique identifier for this word entry
+    pub id: i64,
+    /// The word itself
+    pub word: String,
+    /// Part of speech (noun, verb, adjective, etc.)
+    pub pos: String,
+    /// Language of the word
+    pub language: String,
+    /// Etymology number for words with multiple etymologies
+    pub etymology_num: i32,
 }
 
 /// A complete definition entry for a word
@@ -184,6 +204,18 @@ impl SearchResult {
             word,
             pos,
             preview,
+            score: 0.0,
+        }
+    }
+
+    /// Create a new SearchResult with a score
+    pub fn with_score(id: i64, word: String, pos: String, preview: String, score: f64) -> Self {
+        Self {
+            id,
+            word,
+            pos,
+            preview,
+            score,
         }
     }
 }
