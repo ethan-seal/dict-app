@@ -101,6 +101,12 @@ dependencies {
     // JSON parsing for JNI results
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // Networking for database download
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Zstd decompression
+    implementation("com.github.luben:zstd-jni:1.5.5-11")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

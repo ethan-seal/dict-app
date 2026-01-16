@@ -4,10 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -64,10 +73,32 @@ fun DictApp(
     viewModel: DictViewModel = viewModel()
 ) {
     val navController = rememberNavController()
+    val isDatabaseReady by viewModel.isDatabaseReady.collectAsState()
+
+    // Track if we've determined the start destination
+    var startDestinationDetermined by remember { mutableStateOf(false) }
+    var startDestination by remember { mutableStateOf(Routes.DOWNLOAD) }
+
+    // Determine start destination based on database status
+    LaunchedEffect(isDatabaseReady) {
+        startDestination = if (isDatabaseReady) Routes.SEARCH else Routes.DOWNLOAD
+        startDestinationDetermined = true
+    }
+
+    // Show loading while determining start destination
+    if (!startDestinationDetermined) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     NavHost(
         navController = navController,
-        startDestination = Routes.SEARCH // TODO: Check if DB exists, show download first if not
+        startDestination = startDestination
     ) {
         // Download screen - shown on first launch
         composable(Routes.DOWNLOAD) {

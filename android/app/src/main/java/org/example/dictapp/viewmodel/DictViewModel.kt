@@ -1,9 +1,11 @@
 package org.example.dictapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +17,9 @@ import kotlinx.coroutines.withContext
 import org.example.dictapp.DictCore
 import org.example.dictapp.FullDefinition
 import org.example.dictapp.SearchResult
+import org.example.dictapp.download.DownloadManager
+import org.example.dictapp.download.DownloadProgress
+import org.example.dictapp.download.LanguageInfo
 
 /**
  * State for search operations.
@@ -84,11 +89,29 @@ sealed class DownloadState {
  * - Core library initialization
  */
 @OptIn(FlowPreview::class)
-class DictViewModel : ViewModel() {
+class DictViewModel(application: Application) : AndroidViewModel(application) {
+
+    // Download manager for handling database downloads
+    private val downloadManager = DownloadManager(application)
+
+    // Current download job (for cancellation)
+    private var downloadJob: Job? = null
 
     // Database initialization state
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
+
+    // Whether database exists (for determining start destination)
+    private val _isDatabaseReady = MutableStateFlow(false)
+    val isDatabaseReady: StateFlow<Boolean> = _isDatabaseReady.asStateFlow()
+
+    // Available languages for download
+    private val _availableLanguages = MutableStateFlow<List<LanguageInfo>>(emptyList())
+    val availableLanguages: StateFlow<List<LanguageInfo>> = _availableLanguages.asStateFlow()
+
+    // Selected language for download
+    private val _selectedLanguage = MutableStateFlow<LanguageInfo?>(null)
+    val selectedLanguage: StateFlow<LanguageInfo?> = _selectedLanguage.asStateFlow()
 
     // Search state
     private val _query = MutableStateFlow("")
@@ -109,6 +132,10 @@ class DictViewModel : ViewModel() {
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
 
     init {
+        // Check if database exists and load available languages
+        checkDatabaseStatus()
+        loadAvailableLanguages()
+
         // Set up debounced search
         viewModelScope.launch {
             _query
@@ -120,6 +147,38 @@ class DictViewModel : ViewModel() {
                 }
         }
     }
+
+    /**
+     * Check if the database is already downloaded.
+     */
+    private fun checkDatabaseStatus() {
+        _isDatabaseReady.value = downloadManager.isDatabaseDownloaded()
+        if (_isDatabaseReady.value) {
+            // Auto-initialize if database exists
+            initialize(downloadManager.getDatabasePath())
+        }
+    }
+
+    /**
+     * Load the list of available languages.
+     */
+    private fun loadAvailableLanguages() {
+        _availableLanguages.value = downloadManager.getAvailableLanguages()
+        // Default to first language (English)
+        _selectedLanguage.value = _availableLanguages.value.firstOrNull()
+    }
+
+    /**
+     * Select a language for download.
+     */
+    fun selectLanguage(language: LanguageInfo) {
+        _selectedLanguage.value = language
+    }
+
+    /**
+     * Get the path to the database file.
+     */
+    fun getDatabasePath(): String = downloadManager.getDatabasePath()
 
     /**
      * Initialize the dictionary core with the database path.
@@ -212,44 +271,72 @@ class DictViewModel : ViewModel() {
      * @param language Language code to download (e.g., "english")
      */
     fun startDownload(language: String) {
-        viewModelScope.launch {
+        // Cancel any existing download
+        downloadJob?.cancel()
+
+        downloadJob = viewModelScope.launch {
             _downloadState.value = DownloadState.Downloading(
                 progress = 0f,
                 bytesDownloaded = 0,
                 totalBytes = 0
             )
 
-            // TODO: Implement actual download logic
-            // This is a placeholder for the download implementation
-            // The actual implementation would:
-            // 1. Determine CDN URL for the language
-            // 2. Download the .db.zst file with progress tracking
-            // 3. Decompress with zstd
-            // 4. Verify checksum
-            // 5. Initialize DictCore with the path
-
-            // For now, simulate progress (remove this in real implementation)
             try {
-                // Simulated download progress
-                for (i in 0..100 step 10) {
-                    kotlinx.coroutines.delay(100)
-                    _downloadState.value = DownloadState.Downloading(
-                        progress = i / 100f,
-                        bytesDownloaded = (i * 3_000_000L),
-                        totalBytes = 300_000_000L
-                    )
+                downloadManager.downloadDatabase(language).collect { progress ->
+                    when (progress) {
+                        is DownloadProgress.Starting -> {
+                            _downloadState.value = DownloadState.Downloading(
+                                progress = 0f,
+                                bytesDownloaded = 0,
+                                totalBytes = 0
+                            )
+                        }
+
+                        is DownloadProgress.Downloading -> {
+                            _downloadState.value = DownloadState.Downloading(
+                                progress = progress.progress,
+                                bytesDownloaded = progress.bytesDownloaded,
+                                totalBytes = progress.totalBytes
+                            )
+                        }
+
+                        is DownloadProgress.Extracting -> {
+                            _downloadState.value = DownloadState.Extracting
+                        }
+
+                        is DownloadProgress.Complete -> {
+                            // Initialize the core with the downloaded database
+                            val success = initialize(progress.dbPath)
+                            if (success) {
+                                _isDatabaseReady.value = true
+                                _downloadState.value = DownloadState.Complete
+                            } else {
+                                _downloadState.value = DownloadState.Error(
+                                    "Failed to initialize dictionary database"
+                                )
+                            }
+                        }
+
+                        is DownloadProgress.Error -> {
+                            _downloadState.value = DownloadState.Error(progress.message)
+                        }
+                    }
                 }
-
-                _downloadState.value = DownloadState.Extracting
-                kotlinx.coroutines.delay(500)
-
-                _downloadState.value = DownloadState.Complete
             } catch (e: Exception) {
                 _downloadState.value = DownloadState.Error(
                     e.message ?: "Download failed"
                 )
             }
         }
+    }
+
+    /**
+     * Cancel an ongoing download.
+     */
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        _downloadState.value = DownloadState.Idle
     }
 
     /**
