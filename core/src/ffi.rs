@@ -209,6 +209,8 @@ pub extern "C" fn dict_version() -> *const c_char {
 
 #[cfg(target_os = "android")]
 mod android {
+    use std::ptr;
+    
     use jni::objects::{JClass, JString};
     use jni::sys::{jint, jlong, jstring};
     use jni::JNIEnv;
@@ -219,7 +221,7 @@ mod android {
     /// 
     /// Kotlin signature: external fun init(dbPath: String): Int
     #[no_mangle]
-    pub extern "system" fn Java_com_dictapp_DictCore_init(
+    pub extern "system" fn Java_org_example_dictapp_DictCore_init(
         mut env: JNIEnv,
         _class: JClass,
         db_path: JString,
@@ -246,7 +248,7 @@ mod android {
     /// 
     /// Kotlin signature: external fun search(query: String, limit: Int): String
     #[no_mangle]
-    pub extern "system" fn Java_com_dictapp_DictCore_search(
+    pub extern "system" fn Java_org_example_dictapp_DictCore_search(
         mut env: JNIEnv,
         _class: JClass,
         query: JString,
@@ -280,7 +282,7 @@ mod android {
     /// 
     /// Kotlin signature: external fun getDefinition(wordId: Long): String?
     #[no_mangle]
-    pub extern "system" fn Java_com_dictapp_DictCore_getDefinition(
+    pub extern "system" fn Java_org_example_dictapp_DictCore_getDefinition(
         mut env: JNIEnv,
         _class: JClass,
         word_id: jlong,
@@ -308,7 +310,7 @@ mod android {
     /// 
     /// Kotlin signature: external fun close()
     #[no_mangle]
-    pub extern "system" fn Java_com_dictapp_DictCore_close(
+    pub extern "system" fn Java_org_example_dictapp_DictCore_close(
         _env: JNIEnv,
         _class: JClass,
     ) {
