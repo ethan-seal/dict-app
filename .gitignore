@@ -1,0 +1,115 @@
+# =============================================================================
+# Rust
+# =============================================================================
+/target/
+**/target/
+Cargo.lock
+**/*.rs.bk
+
+# =============================================================================
+# Android
+# =============================================================================
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/modules.xml
+.idea/misc.xml
+.idea/vcs.xml
+.idea/jarRepositories.xml
+.idea/navEditor.xml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore
+*.jks
+*.keystore
+
+# Android profiling
+*.hprof
+
+# =============================================================================
+# JNI / Native Libraries (build artifacts)
+# =============================================================================
+# Note: jniLibs/ contains compiled .so files from Rust - these are build artifacts
+android/app/src/main/jniLibs/**/*.so
+
+# =============================================================================
+# Data Files
+# =============================================================================
+data/raw/
+data/processed/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.jsonl
+*.jsonl.gz
+*.zst
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, Android Studio, CLion)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.#*
+
+# =============================================================================
+# OS Generated
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# =============================================================================
+# Misc
+# =============================================================================
+*.log
+*.tmp
+*.temp
+.env
+.env.local
+*.pem
+*.key

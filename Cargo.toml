@@ -1,0 +1,40 @@
+# Workspace configuration for the Wiktionary Dictionary App
+#
+# This workspace contains:
+# - core: The main Rust library with SQLite and search functionality
+# - tools/preprocessor: Build-time tool for converting JSONL to SQLite
+
+[workspace]
+resolver = "2"
+members = [
+    "core",
+    "tools/preprocessor",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Wiktionary Dictionary App Contributors"]
+license = "MIT"
+repository = "https://github.com/example/dict-app"
+
+[workspace.dependencies]
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# JNI (for Android)
+jni = "0.21"
+
+# Logging
+log = "0.4"
+
+# Testing
+tempfile = "3.0"
