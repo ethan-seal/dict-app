@@ -43,3 +43,8 @@ android_logger = "0.14"
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "performance"
+harness = false

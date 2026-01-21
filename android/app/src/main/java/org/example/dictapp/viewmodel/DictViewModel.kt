@@ -1,6 +1,7 @@
 package org.example.dictapp.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -152,11 +153,34 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
      * Check if the database is already downloaded.
      */
     private fun checkDatabaseStatus() {
-        _isDatabaseReady.value = downloadManager.isDatabaseDownloaded()
-        if (_isDatabaseReady.value) {
-            // Auto-initialize if database exists
-            initialize(downloadManager.getDatabasePath())
+        Log.d(TAG, "checkDatabaseStatus: checking...")
+        
+        // List all files in filesDir for debugging
+        val filesDir = getApplication<Application>().filesDir
+        Log.d(TAG, "checkDatabaseStatus: filesDir=${filesDir.absolutePath}")
+        val files = filesDir.listFiles()
+        if (files.isNullOrEmpty()) {
+            Log.d(TAG, "checkDatabaseStatus: filesDir is empty")
+        } else {
+            files.forEach { file ->
+                Log.d(TAG, "checkDatabaseStatus: found file=${file.name}, size=${file.length()}")
+            }
         }
+        
+        val isDownloaded = downloadManager.isDatabaseDownloaded()
+        Log.d(TAG, "checkDatabaseStatus: isDownloaded=$isDownloaded")
+        _isDatabaseReady.value = isDownloaded
+        if (isDownloaded) {
+            // Auto-initialize if database exists
+            val dbPath = downloadManager.getDatabasePath()
+            Log.d(TAG, "checkDatabaseStatus: initializing with path=$dbPath")
+            val success = initialize(dbPath)
+            Log.d(TAG, "checkDatabaseStatus: initialization success=$success")
+        }
+    }
+    
+    companion object {
+        private const val TAG = "DictViewModel"
     }
 
     /**
@@ -187,7 +211,9 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
      * @return true if initialization succeeded
      */
     fun initialize(dbPath: String): Boolean {
+        Log.d(TAG, "initialize: calling DictCore.init with path=$dbPath")
         val result = DictCore.init(dbPath)
+        Log.d(TAG, "initialize: DictCore.init returned $result (SUCCESS=${DictCore.SUCCESS})")
         _isInitialized.value = (result == DictCore.SUCCESS)
         return _isInitialized.value
     }

@@ -45,7 +45,7 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
         // 2. Prefix matches (score based on length difference)
         let remaining = limit - results.len() as u32;
         let prefix_results = search_prefix(handle, query, remaining)?;
-        
+
         // Add only results not already in the list
         for mut result in prefix_results {
             if !results.iter().any(|r| r.id == result.id) {
@@ -61,7 +61,7 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
         // 3. FTS matches (score from FTS5 rank)
         let remaining = limit - results.len() as u32;
         let fts_results = search_fts(handle, &fts_query, remaining)?;
-        
+
         for mut result in fts_results {
             if !results.iter().any(|r| r.id == result.id) {
                 // FTS results get a base score of 2.0 plus their rank
@@ -75,7 +75,7 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
     if (results.len() as u32) < limit && query_lower.len() >= MIN_FUZZY_QUERY_LENGTH {
         let remaining = limit - results.len() as u32;
         let fuzzy_results = search_fuzzy(handle, &query_lower, remaining)?;
-        
+
         for result in fuzzy_results {
             if !results.iter().any(|r| r.id == result.id) {
                 results.push(result);
@@ -84,7 +84,11 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
     }
 
     // Sort by score (lower is better)
-    results.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        a.score
+            .partial_cmp(&b.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Truncate to limit
     results.truncate(limit as usize);
@@ -112,7 +116,7 @@ fn search_exact(handle: &DictHandle, word: &str, limit: u32) -> Result<Vec<Searc
 /// Search for words starting with a prefix
 fn search_prefix(handle: &DictHandle, prefix: &str, limit: u32) -> Result<Vec<SearchResult>> {
     let pattern = format!("{}%", prefix);
-    
+
     let mut stmt = handle.conn.prepare(
         r#"
         SELECT w.id, w.word, w.pos,
@@ -150,9 +154,9 @@ fn search_fts(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Search
         let pos: String = row.get(2)?;
         let definition: String = row.get(3)?;
         let rank: f64 = row.get(4)?;
-        
+
         let preview = truncate_preview(&definition, 100);
-        
+
         Ok(SearchResult::with_score(id, word, pos, preview, rank))
     })?;
     rows.collect::<std::result::Result<Vec<_>, _>>()
@@ -169,7 +173,7 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
     let prefix_len = std::cmp::min(2, query.len());
     let prefix = &query[..prefix_len];
     let pattern = format!("{}%", prefix);
-    
+
     let mut stmt = handle.conn.prepare(
         r#"
         SELECT w.id, w.word, w.pos,
@@ -181,14 +185,14 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
     )?;
 
     let candidates = stmt.query_map(params![pattern], row_to_search_result)?;
-    
+
     // Filter and score by Levenshtein distance
     let mut fuzzy_results: Vec<SearchResult> = candidates
         .filter_map(|r| r.ok())
         .filter_map(|mut result| {
             let word_lower = result.word.to_lowercase();
             let distance = levenshtein_distance(query, &word_lower);
-            
+
             if distance > 0 && distance <= MAX_FUZZY_DISTANCE {
                 // Score is 3.0 (base for fuzzy) + distance
                 result.score = 3.0 + distance as f64;
@@ -198,13 +202,13 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
             }
         })
         .collect();
-    
+
     // Also try candidates that differ by first character (common typos)
     if fuzzy_results.len() < limit as usize && query.len() >= 2 {
         // Get some words that might match with a different first letter
         let suffix = &query[1..];
         let suffix_pattern = format!("_%{}%", suffix);
-        
+
         let mut stmt2 = handle.conn.prepare(
             r#"
             SELECT w.id, w.word, w.pos,
@@ -214,17 +218,17 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
             LIMIT 500
             "#,
         )?;
-        
+
         let more_candidates = stmt2.query_map(params![suffix_pattern], row_to_search_result)?;
-        
+
         for result in more_candidates.filter_map(|r| r.ok()) {
             if fuzzy_results.iter().any(|r| r.id == result.id) {
                 continue;
             }
-            
+
             let word_lower = result.word.to_lowercase();
             let distance = levenshtein_distance(query, &word_lower);
-            
+
             if distance > 0 && distance <= MAX_FUZZY_DISTANCE {
                 let mut result = result;
                 result.score = 3.0 + distance as f64;
@@ -232,11 +236,15 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
             }
         }
     }
-    
+
     // Sort by score
-    fuzzy_results.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+    fuzzy_results.sort_by(|a, b| {
+        a.score
+            .partial_cmp(&b.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     fuzzy_results.truncate(limit as usize);
-    
+
     Ok(fuzzy_results)
 }
 
@@ -246,10 +254,10 @@ fn row_to_search_result(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
     let word: String = row.get(1)?;
     let pos: String = row.get(2)?;
     let definition: String = row.get(3)?;
-    
+
     // Truncate preview to reasonable length
     let preview = truncate_preview(&definition, 100);
-    
+
     Ok(SearchResult::new(id, word, pos, preview))
 }
 
@@ -258,8 +266,14 @@ fn truncate_preview(text: &str, max_len: usize) -> String {
     if text.len() <= max_len {
         text.to_string()
     } else {
+        // Find a valid UTF-8 character boundary at or before max_len
+        let mut end = max_len;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        let truncated = &text[..end];
+
         // Try to truncate at word boundary
-        let truncated = &text[..max_len];
         if let Some(last_space) = truncated.rfind(' ') {
             format!("{}...", &truncated[..last_space])
         } else {
@@ -273,17 +287,15 @@ fn truncate_preview(text: &str, max_len: usize) -> String {
 /// Escapes special characters and converts to prefix search format.
 fn prepare_fts_query(query: &str) -> String {
     // Escape FTS5 special characters: " * ^ :
-    let escaped = query
-        .replace('"', "\"\"")
-        .replace(['*', '^', ':'], " ");
-    
+    let escaped = query.replace('"', "\"\"").replace(['*', '^', ':'], " ");
+
     // Add prefix matching by appending *
     // This allows "hel" to match "hello"
     let words: Vec<&str> = escaped.split_whitespace().collect();
     if words.is_empty() {
         return String::new();
     }
-    
+
     // Make each word a prefix search
     words
         .iter()
@@ -301,10 +313,10 @@ fn prepare_fts_query(query: &str) -> String {
 fn levenshtein_distance(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
-    
+
     let m = a_chars.len();
     let n = b_chars.len();
-    
+
     // Handle empty strings
     if m == 0 {
         return n;
@@ -312,34 +324,38 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     if n == 0 {
         return m;
     }
-    
+
     // Optimize: ensure a is the shorter string for O(min(m,n)) space
     if m > n {
         return levenshtein_distance(b, a);
     }
-    
+
     // Use two rows instead of full matrix for space efficiency
     let mut prev_row: Vec<usize> = (0..=m).collect();
     let mut curr_row: Vec<usize> = vec![0; m + 1];
-    
+
     for j in 1..=n {
         curr_row[0] = j;
-        
+
         for i in 1..=m {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
-            
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+
             curr_row[i] = std::cmp::min(
                 std::cmp::min(
-                    prev_row[i] + 1,      // deletion
-                    curr_row[i - 1] + 1,  // insertion
+                    prev_row[i] + 1,     // deletion
+                    curr_row[i - 1] + 1, // insertion
                 ),
-                prev_row[i - 1] + cost,    // substitution
+                prev_row[i - 1] + cost, // substitution
             );
         }
-        
+
         std::mem::swap(&mut prev_row, &mut curr_row);
     }
-    
+
     prev_row[m]
 }
 
@@ -351,46 +367,54 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 fn damerau_levenshtein_distance(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
-    
+
     let m = a_chars.len();
     let n = b_chars.len();
-    
+
     if m == 0 {
         return n;
     }
     if n == 0 {
         return m;
     }
-    
+
     // Need full matrix for transpositions
     let mut d: Vec<Vec<usize>> = vec![vec![0; n + 1]; m + 1];
-    
+
     for i in 0..=m {
         d[i][0] = i;
     }
     for j in 0..=n {
         d[0][j] = j;
     }
-    
+
     for i in 1..=m {
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
-            
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+
             d[i][j] = std::cmp::min(
                 std::cmp::min(
-                    d[i - 1][j] + 1,      // deletion
-                    d[i][j - 1] + 1,      // insertion
+                    d[i - 1][j] + 1, // deletion
+                    d[i][j - 1] + 1, // insertion
                 ),
-                d[i - 1][j - 1] + cost,    // substitution
+                d[i - 1][j - 1] + cost, // substitution
             );
-            
+
             // Transposition
-            if i > 1 && j > 1 && a_chars[i - 1] == b_chars[j - 2] && a_chars[i - 2] == b_chars[j - 1] {
+            if i > 1
+                && j > 1
+                && a_chars[i - 1] == b_chars[j - 2]
+                && a_chars[i - 2] == b_chars[j - 1]
+            {
                 d[i][j] = std::cmp::min(d[i][j], d[i - 2][j - 2] + 1);
             }
         }
     }
-    
+
     d[m][n]
 }
 
@@ -445,6 +469,17 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_preview_multibyte_utf8() {
+        // Regression test: truncating in the middle of a multi-byte UTF-8 character
+        // should not panic. The subscript characters like ₀ are 3 bytes each.
+        let text = "Chemical formula: C₁₅H₂₀O₄ is important";
+        // This should not panic even if max_len falls inside a multi-byte char
+        let result = truncate_preview(text, 22); // Falls inside ₁
+        assert!(result.ends_with("..."));
+        assert!(result.len() < text.len());
+    }
+
+    #[test]
     fn test_prepare_fts_query_escapes_special_chars() {
         // Special chars should be escaped/removed
         assert_eq!(prepare_fts_query("test*query"), "test* query*");
@@ -455,23 +490,23 @@ mod tests {
     fn test_levenshtein_distance() {
         // Same strings
         assert_eq!(levenshtein_distance("hello", "hello"), 0);
-        
+
         // Empty strings
         assert_eq!(levenshtein_distance("", "hello"), 5);
         assert_eq!(levenshtein_distance("hello", ""), 5);
         assert_eq!(levenshtein_distance("", ""), 0);
-        
+
         // One edit
-        assert_eq!(levenshtein_distance("hello", "helo"), 1);    // deletion
-        assert_eq!(levenshtein_distance("hello", "helloo"), 1);  // insertion
-        assert_eq!(levenshtein_distance("hello", "hallo"), 1);   // substitution
-        
+        assert_eq!(levenshtein_distance("hello", "helo"), 1); // deletion
+        assert_eq!(levenshtein_distance("hello", "helloo"), 1); // insertion
+        assert_eq!(levenshtein_distance("hello", "hallo"), 1); // substitution
+
         // Two edits
         assert_eq!(levenshtein_distance("hello", "halo"), 2);
         assert_eq!(levenshtein_distance("kitten", "sitten"), 1);
         assert_eq!(levenshtein_distance("kitten", "sittin"), 2);
         assert_eq!(levenshtein_distance("kitten", "sitting"), 3);
-        
+
         // Completely different
         assert_eq!(levenshtein_distance("abc", "xyz"), 3);
     }
@@ -481,7 +516,7 @@ mod tests {
         // Transposition
         assert_eq!(damerau_levenshtein_distance("ab", "ba"), 1);
         assert_eq!(damerau_levenshtein_distance("hello", "hlelo"), 1);
-        
+
         // Compare with standard Levenshtein (which counts transposition as 2)
         assert_eq!(levenshtein_distance("ab", "ba"), 2);
     }
@@ -490,7 +525,7 @@ mod tests {
     fn test_search_exact_match() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "hello", 10).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].word, "hello");
@@ -501,10 +536,10 @@ mod tests {
     fn test_search_prefix_match() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "hel", 10).unwrap();
         assert!(results.len() >= 4); // hello, help, helper, helping
-        
+
         // Results should be sorted by relevance
         // Shorter matches should come first
         let words: Vec<&str> = results.iter().map(|r| r.word.as_str()).collect();
@@ -516,10 +551,10 @@ mod tests {
     fn test_search_empty_query() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "", 10).unwrap();
         assert!(results.is_empty());
-        
+
         let results = search_words(&handle, "   ", 10).unwrap();
         assert!(results.is_empty());
     }
@@ -528,7 +563,7 @@ mod tests {
     fn test_search_limit() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "h", 3).unwrap();
         assert!(results.len() <= 3);
     }
@@ -537,22 +572,26 @@ mod tests {
     fn test_search_no_duplicates() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "help", 10).unwrap();
-        
+
         // Check for duplicates
         let ids: Vec<i64> = results.iter().map(|r| r.id).collect();
         let unique_ids: std::collections::HashSet<i64> = ids.iter().copied().collect();
-        assert_eq!(ids.len(), unique_ids.len(), "Search results contain duplicates");
+        assert_eq!(
+            ids.len(),
+            unique_ids.len(),
+            "Search results contain duplicates"
+        );
     }
 
     #[test]
     fn test_search_results_sorted_by_score() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         let results = search_words(&handle, "help", 10).unwrap();
-        
+
         // Verify results are sorted by score (ascending)
         for i in 1..results.len() {
             assert!(
@@ -568,12 +607,15 @@ mod tests {
     fn test_fuzzy_search_typo_tolerance() {
         let (_dir, handle) = setup_test_db();
         populate_test_data(&handle);
-        
+
         // Common typo: "helo" instead of "hello"
         let results = search_words(&handle, "helo", 10).unwrap();
         let words: Vec<&str> = results.iter().map(|r| r.word.as_str()).collect();
-        
+
         // Should find "hello" with fuzzy matching
-        assert!(words.contains(&"hello"), "Expected to find 'hello' for query 'helo'");
+        assert!(
+            words.contains(&"hello"),
+            "Expected to find 'hello' for query 'helo'"
+        );
     }
 }

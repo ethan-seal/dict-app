@@ -34,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,10 @@ fun DefinitionScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag(TestTags.BACK_BUTTON)
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
@@ -90,17 +94,21 @@ fun DefinitionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .testTag(TestTags.DEFINITION_SCREEN)
         ) {
             when (val state = definitionState) {
                 is DefinitionState.Loading -> {
                     CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .testTag(TestTags.LOADING_INDICATOR)
                     )
                 }
 
                 is DefinitionState.Success -> {
                     DefinitionContent(
-                        definition = state.definition
+                        definition = state.definition,
+                        modifier = Modifier.testTag(TestTags.DEFINITION_CONTENT)
                     )
                 }
 
@@ -184,7 +192,9 @@ private fun WordHeader(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag(TestTags.DEFINITION_HEADER),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
@@ -202,7 +212,8 @@ private fun WordHeader(
                     text = definition.word,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.testTag(TestTags.DEFINITION_WORD)
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -211,7 +222,8 @@ private fun WordHeader(
                     text = definition.pos,
                     style = MaterialTheme.typography.titleMedium,
                     fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    modifier = Modifier.testTag(TestTags.DEFINITION_POS)
                 )
             }
 

@@ -37,9 +37,10 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Keystore
+# Keystore and signing
 *.jks
 *.keystore
+keystore.properties
 
 # Android profiling
 *.hprof

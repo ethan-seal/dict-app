@@ -1,0 +1,64 @@
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="shell" {
+        pane
+    }
+
+    tab name="opencode" {
+        pane {
+            command "zsh"
+            args "-c" "opencode; exec zsh"
+        }
+    }
+
+    // Full pipeline: Rust native build -> Android build (sequential)
+    tab name="full-build" {
+        pane {
+            command "zsh"
+            args "-c" "cargo watch -w core/src -s './build-android-native.sh && cd android && ./gradlew assembleDebug'; exec zsh"
+        }
+    }
+
+    // Rust-only iteration (fast, host target)
+    tab name="core-build" {
+        pane {
+            cwd "core"
+            command "zsh"
+            args "-c" "cargo watch -x build; exec zsh"
+        }
+    }
+
+    tab name="core-test" {
+        pane {
+            cwd "core"
+            command "zsh"
+            args "-c" "cargo watch -x test; exec zsh"
+        }
+    }
+
+    // Android-only (when native libs are stable)
+    tab name="android-build" {
+        pane {
+            cwd "android"
+            command "zsh"
+            args "-c" "./gradlew assembleDebug --continuous; exec zsh"
+        }
+    }
+
+    tab name="android-test" {
+        pane {
+            cwd "android"
+            command "zsh"
+            args "-c" "./gradlew test --continuous; exec zsh"
+        }
+    }
+}

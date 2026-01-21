@@ -1,7 +1,7 @@
 package org.example.dictapp.download
 
 import android.content.Context
-import com.github.luben.zstd.ZstdInputStream
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -15,6 +15,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
 
 /**
  * Manages downloading and decompressing dictionary database files.
@@ -41,9 +42,10 @@ import java.util.concurrent.TimeUnit
 class DownloadManager(private val context: Context) {
 
     companion object {
-        // Base URL for dictionary database CDN
-        // In production, this would be a real CDN URL
-        private const val CDN_BASE_URL = "https://dict-app-cdn.example.com/databases"
+        private const val TAG = "DownloadManager"
+        
+        // Base URL for dictionary database CDN (DigitalOcean Spaces)
+        private const val CDN_BASE_URL = "https://wiktionary.atl1.digitaloceanspaces.com"
         
         // Database filename
         private const val DB_FILENAME = "dict.db"
@@ -66,7 +68,9 @@ class DownloadManager(private val context: Context) {
      * Get the path where the database should be stored.
      */
     fun getDatabasePath(): String {
-        return File(context.filesDir, DB_FILENAME).absolutePath
+        val path = File(context.filesDir, DB_FILENAME).absolutePath
+        Log.d(TAG, "getDatabasePath() = $path")
+        return path
     }
 
     /**
@@ -74,7 +78,10 @@ class DownloadManager(private val context: Context) {
      */
     fun isDatabaseDownloaded(): Boolean {
         val dbFile = File(getDatabasePath())
-        return dbFile.exists() && dbFile.length() > 0
+        val exists = dbFile.exists()
+        val length = if (exists) dbFile.length() else 0L
+        Log.d(TAG, "isDatabaseDownloaded: path=${dbFile.absolutePath}, exists=$exists, length=$length")
+        return exists && length > 0
     }
 
     /**
@@ -99,6 +106,10 @@ class DownloadManager(private val context: Context) {
             val url = getDownloadUrl(language)
             val compressedFile = File(context.cacheDir, "${language}-dict.db.zst")
             val finalDbFile = File(getDatabasePath())
+            
+            Log.d(TAG, "Starting download: url=$url")
+            Log.d(TAG, "Compressed file path: ${compressedFile.absolutePath}")
+            Log.d(TAG, "Final database path: ${finalDbFile.absolutePath}")
 
             // Download the compressed file
             downloadFile(url, compressedFile).collect { progress ->
@@ -106,6 +117,7 @@ class DownloadManager(private val context: Context) {
             }
 
             // Verify download
+            Log.d(TAG, "Download complete. Compressed file exists=${compressedFile.exists()}, size=${compressedFile.length()}")
             if (!compressedFile.exists() || compressedFile.length() == 0L) {
                 emit(DownloadProgress.Error("Download failed: file is empty or missing"))
                 return@flow
@@ -113,16 +125,31 @@ class DownloadManager(private val context: Context) {
 
             // Decompress
             emit(DownloadProgress.Extracting)
-            decompressZstd(compressedFile, finalDbFile)
+            Log.d(TAG, "Starting decompression...")
+            try {
+                decompressZstd(compressedFile, finalDbFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "Decompression failed with exception", e)
+                throw e
+            } catch (e: Error) {
+                Log.e(TAG, "Decompression failed with error", e)
+                throw e
+            }
 
             // Verify decompression
-            if (!finalDbFile.exists() || finalDbFile.length() == 0L) {
+            val decompressedExists = finalDbFile.exists()
+            val decompressedSize = if (decompressedExists) finalDbFile.length() else 0L
+            Log.d(TAG, "Decompression complete. File exists=$decompressedExists, size=$decompressedSize")
+            
+            if (!decompressedExists || decompressedSize == 0L) {
                 emit(DownloadProgress.Error("Decompression failed: database file is invalid"))
                 return@flow
             }
 
             // Verify it's a valid SQLite database (check magic bytes)
-            if (!verifySqliteDatabase(finalDbFile)) {
+            val isValidSqlite = verifySqliteDatabase(finalDbFile)
+            Log.d(TAG, "SQLite verification: valid=$isValidSqlite")
+            if (!isValidSqlite) {
                 finalDbFile.delete()
                 emit(DownloadProgress.Error("Invalid database file"))
                 return@flow
@@ -130,10 +157,14 @@ class DownloadManager(private val context: Context) {
 
             // Clean up compressed file
             compressedFile.delete()
+            
+            // Final verification
+            Log.d(TAG, "Download complete! Final file: path=${finalDbFile.absolutePath}, exists=${finalDbFile.exists()}, size=${finalDbFile.length()}")
 
             emit(DownloadProgress.Complete(finalDbFile.absolutePath))
 
         } catch (e: Exception) {
+            Log.e(TAG, "Download failed with exception", e)
             emit(DownloadProgress.Error(e.message ?: "Unknown error occurred"))
         }
     }.flowOn(Dispatchers.IO)
@@ -190,19 +221,45 @@ class DownloadManager(private val context: Context) {
 
     /**
      * Decompress a zstd-compressed file.
+     * Ensures data is synced to disk before returning.
      */
     private suspend fun decompressZstd(source: File, destination: File) = withContext(Dispatchers.IO) {
+        Log.d(TAG, "decompressZstd: creating parent dirs")
         destination.parentFile?.mkdirs()
 
-        ZstdInputStream(BufferedInputStream(FileInputStream(source))).use { zstdInput ->
-            BufferedOutputStream(FileOutputStream(destination)).use { output ->
-                val buffer = ByteArray(DECOMPRESS_BUFFER_SIZE)
-                var bytesRead: Int
+        Log.d(TAG, "decompressZstd: opening streams")
+        var bytesWritten = 0L
+        try {
+            ZstdCompressorInputStream(BufferedInputStream(FileInputStream(source))).use { zstdInput ->
+                Log.d(TAG, "decompressZstd: ZstdCompressorInputStream opened successfully")
+                FileOutputStream(destination).use { fos ->
+                    val output = BufferedOutputStream(fos)
+                    val buffer = ByteArray(DECOMPRESS_BUFFER_SIZE)
+                    var bytesRead: Int
 
-                while (zstdInput.read(buffer).also { bytesRead = it } != -1) {
-                    output.write(buffer, 0, bytesRead)
+                    while (zstdInput.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        bytesWritten += bytesRead
+                        // Log progress every 50MB
+                        if (bytesWritten % (50 * 1024 * 1024) < DECOMPRESS_BUFFER_SIZE) {
+                            Log.d(TAG, "decompressZstd: written ${bytesWritten / (1024 * 1024)} MB")
+                        }
+                    }
+                    
+                    Log.d(TAG, "decompressZstd: flushing buffer, total=${bytesWritten / (1024 * 1024)} MB")
+                    output.flush()
+                    Log.d(TAG, "decompressZstd: syncing to disk")
+                    fos.fd.sync()
+                    Log.d(TAG, "decompressZstd: synced to disk successfully")
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "decompressZstd: failed after writing $bytesWritten bytes", e)
+            // Clean up partial file
+            if (destination.exists()) {
+                destination.delete()
+            }
+            throw e
         }
     }
 

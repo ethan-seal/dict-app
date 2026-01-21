@@ -373,6 +373,69 @@ log = "0.4"
 | Download size (English) | ~300MB |
 | Installed size (English) | ~800MB |
 
+## Testing
+
+### Rust Core Tests
+
+Run the 31 existing unit tests for the Rust core:
+
+```bash
+cargo test
+```
+
+Tests cover: database operations, FTS5 search, fuzzy matching, FFI error handling.
+
+### Android Integration Tests
+
+Integration tests verify the Rust-Android JNI boundary works correctly.
+
+**Prerequisites:**
+- Native libraries built: `./build-android-native.sh`
+- Android emulator AVD configured (default: `Medium_Phone_API_35`)
+
+**Run tests (recommended):**
+
+```bash
+# Automatic emulator management - starts if needed, runs tests
+./run-android-tests.sh
+
+# With emulator GUI visible
+./run-android-tests.sh --gui
+
+# Stop emulator after tests complete
+./run-android-tests.sh --stop-emulator
+
+# Use a different AVD
+./run-android-tests.sh --avd Pixel_6_API_33
+```
+
+**Run tests manually:**
+
+```bash
+# Start emulator first, then:
+cd android
+./gradlew connectedAndroidTest
+```
+
+Or run a specific test class:
+
+```bash
+./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.example.dictapp.DictCoreIntegrationTest
+```
+
+**Test data:**
+- Uses `test-dict.db` in `androidTest/assets/` (~220KB)
+- Contains 13 words with definitions, pronunciations, etymologies, and translations
+
+**Test coverage:**
+| Category | Tests |
+|----------|-------|
+| Initialization | `init_withValidPath`, `init_withInvalidPath`, `init_calledTwice` |
+| Search | `search_exactMatch`, `search_prefixMatch`, `search_noMatch`, `search_emptyQuery`, `search_withLimit`, `search_multiplePartsOfSpeech` |
+| Get Definition | `getDefinition_validId`, `getDefinition_invalidId`, `getDefinition_includesPronunciations`, `getDefinition_includesEtymology` |
+| Lifecycle | `close_afterInit_allowsReinit`, `close_calledMultipleTimes`, `close_withoutInit` |
+| Data Integrity | `searchThenGetDefinition_dataIsConsistent`, `definitionFields_haveCorrectTypes` |
+
 ## Future Enhancements
 
 - [ ] Offline audio pronunciation playback

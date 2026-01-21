@@ -12,10 +12,10 @@ use std::os::raw::{c_char, c_int, c_longlong};
 
 use std::sync::Mutex;
 
-use crate::{DictHandle, get_definition, init, search};
+use crate::{get_definition, init, search, DictHandle};
 
 /// Global handle storage for FFI
-/// 
+///
 /// This is a simple approach - for a more robust solution, consider
 /// using a handle map with integer keys.
 static HANDLE: Mutex<Option<DictHandle>> = Mutex::new(None);
@@ -210,15 +210,18 @@ pub extern "C" fn dict_version() -> *const c_char {
 #[cfg(target_os = "android")]
 mod android {
     use std::ptr;
-    
+
     use jni::objects::{JClass, JString};
     use jni::sys::{jint, jlong, jstring};
     use jni::JNIEnv;
 
     use super::*;
 
+    // Re-export android_logger for use in this module
+    use android_logger;
+
     /// JNI: Initialize the dictionary
-    /// 
+    ///
     /// Kotlin signature: external fun init(dbPath: String): Int
     #[no_mangle]
     pub extern "system" fn Java_org_example_dictapp_DictCore_init(
@@ -245,7 +248,7 @@ mod android {
     }
 
     /// JNI: Search for words
-    /// 
+    ///
     /// Kotlin signature: external fun search(query: String, limit: Int): String
     #[no_mangle]
     pub extern "system" fn Java_org_example_dictapp_DictCore_search(
@@ -279,11 +282,11 @@ mod android {
     }
 
     /// JNI: Get full definition
-    /// 
+    ///
     /// Kotlin signature: external fun getDefinition(wordId: Long): String?
     #[no_mangle]
     pub extern "system" fn Java_org_example_dictapp_DictCore_getDefinition(
-        mut env: JNIEnv,
+        env: JNIEnv,
         _class: JClass,
         word_id: jlong,
     ) -> jstring {
@@ -307,15 +310,49 @@ mod android {
     }
 
     /// JNI: Close the dictionary
-    /// 
+    ///
     /// Kotlin signature: external fun close()
     #[no_mangle]
-    pub extern "system" fn Java_org_example_dictapp_DictCore_close(
-        _env: JNIEnv,
-        _class: JClass,
-    ) {
+    pub extern "system" fn Java_org_example_dictapp_DictCore_close(_env: JNIEnv, _class: JClass) {
         let mut guard = HANDLE.lock().unwrap();
         *guard = None;
+    }
+
+    /// Called when the native library is loaded by System.loadLibrary()
+    ///
+    /// This sets up:
+    /// - Android logging (so log::* macros appear in logcat)
+    /// - Panic hook (to log panics before they crash the app)
+    #[no_mangle]
+    pub extern "system" fn JNI_OnLoad(_vm: jni::JavaVM, _reserved: *mut std::ffi::c_void) -> jint {
+        // Initialize Android logger
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
+                .with_tag("DictCore"),
+        );
+
+        // Set panic hook to log panics before they crash
+        std::panic::set_hook(Box::new(|info| {
+            let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+
+            let location = info
+                .location()
+                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                .unwrap_or_else(|| "unknown".to_string());
+
+            log::error!("PANIC at {}: {}", location, msg);
+        }));
+
+        log::info!("DictCore native library loaded");
+
+        jni::sys::JNI_VERSION_1_6
     }
 }
 
@@ -347,11 +384,11 @@ mod tests {
     fn test_not_initialized() {
         let query = CString::new("test").unwrap();
         let mut out: *mut c_char = ptr::null_mut();
-        
+
         unsafe {
             // Ensure handle is cleared
             dict_close();
-            
+
             let result = dict_search(query.as_ptr(), 10, &mut out);
             assert_eq!(result, FfiError::NotInitialized as c_int);
         }

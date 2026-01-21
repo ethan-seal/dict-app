@@ -70,8 +70,9 @@ unsafe impl Sync for DictHandle {}
 
 /// Initialize the dictionary with a database path
 ///
-/// Opens or creates a SQLite database at the specified path and
-/// returns a handle that can be used for search operations.
+/// Opens an existing SQLite database at the specified path in read-only mode.
+/// This is the appropriate function for the Android/iOS apps where the database
+/// has already been created and populated during the build/download process.
 ///
 /// # Arguments
 ///
@@ -87,7 +88,7 @@ unsafe impl Sync for DictHandle {}
 /// let handle = dict_core::init("/path/to/dictionary.db")?;
 /// ```
 pub fn init(db_path: &str) -> Result<DictHandle> {
-    db::init_database(db_path)
+    db::open_readonly(db_path)
 }
 
 /// Search for words matching a query
@@ -174,11 +175,7 @@ pub fn get_definition(handle: &DictHandle, word_id: i64) -> Option<FullDefinitio
 ///     },
 /// )?;
 /// ```
-pub fn import_jsonl(
-    db_path: &str,
-    jsonl_path: &str,
-    progress: impl Fn(u64, u64),
-) -> Result<()> {
+pub fn import_jsonl(db_path: &str, jsonl_path: &str, progress: impl Fn(u64, u64)) -> Result<()> {
     import::import_from_jsonl(db_path, jsonl_path, progress)
 }
 

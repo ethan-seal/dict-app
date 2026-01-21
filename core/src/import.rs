@@ -68,10 +68,7 @@ pub fn import_from_jsonl_with_stats(
     progress: impl Fn(u64, u64),
 ) -> Result<ImportStats> {
     let path = Path::new(jsonl_path);
-    let is_gzipped = path
-        .extension()
-        .map(|ext| ext == "gz")
-        .unwrap_or(false);
+    let is_gzipped = path.extension().map(|ext| ext == "gz").unwrap_or(false);
 
     // Count total lines for progress reporting
     let total_lines = if is_gzipped {
@@ -290,7 +287,7 @@ fn get_audio_url(sound: &RawSound) -> Option<String> {
 }
 
 /// Create the schema SQL file directory structure
-/// 
+///
 /// Note: The schema is embedded at compile time. This function creates
 /// the directory for development purposes.
 pub fn ensure_schema_dir() -> std::io::Result<()> {

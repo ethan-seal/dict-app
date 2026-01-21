@@ -23,9 +23,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -34,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +54,6 @@ fun SearchScreen(
 ) {
     val query by viewModel.query.collectAsState()
     val searchState by viewModel.searchState.collectAsState()
-    val isSearchActive by viewModel.isSearchActive.collectAsState()
 
     Scaffold(
         modifier = modifier,
@@ -73,46 +72,41 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search bar
-            SearchBar(
-                inputField = {
-                    SearchBarDefaults.InputField(
-                        query = query,
-                        onQueryChange = viewModel::onQueryChange,
-                        onSearch = { viewModel.onSearchActiveChange(false) },
-                        expanded = isSearchActive,
-                        onExpandedChange = viewModel::onSearchActiveChange,
-                        placeholder = { Text("Search words...") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
-                        },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                }
-                            }
-                        }
-                    )
+            // Search field - using OutlinedTextField for better test compatibility
+            OutlinedTextField(
+                value = query,
+                onValueChange = viewModel::onQueryChange,
+                placeholder = { Text("Search words...") },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = "Search")
                 },
-                expanded = isSearchActive,
-                onExpandedChange = viewModel::onSearchActiveChange,
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        }
+                    }
+                },
+                singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                // Search suggestions could go here
-            }
+                    .testTag(TestTags.SEARCH_INPUT)
+            )
 
             // Results
             when (val state = searchState) {
                 is SearchState.Idle -> {
-                    EmptySearchPrompt()
+                    EmptySearchPrompt(
+                        modifier = Modifier.testTag(TestTags.SEARCH_EMPTY_PROMPT)
+                    )
                 }
 
                 is SearchState.Loading -> {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag(TestTags.SEARCH_LOADING),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
@@ -121,11 +115,15 @@ fun SearchScreen(
 
                 is SearchState.Success -> {
                     if (state.results.isEmpty()) {
-                        NoResultsMessage(query = query)
+                        NoResultsMessage(
+                            query = query,
+                            modifier = Modifier.testTag(TestTags.NO_RESULTS_MESSAGE)
+                        )
                     } else {
                         SearchResultsList(
                             results = state.results,
-                            onResultClick = onWordClick
+                            onResultClick = onWordClick,
+                            modifier = Modifier.testTag(TestTags.SEARCH_RESULTS_LIST)
                         )
                     }
                 }
@@ -176,7 +174,8 @@ private fun SearchResultCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .testTag("${TestTags.SEARCH_RESULT_CARD}_${result.id}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),

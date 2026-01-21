@@ -131,9 +131,9 @@ pub fn open_readonly(db_path: &str) -> Result<DictHandle> {
 /// Get the full definition for a word by ID
 pub fn get_full_definition(handle: &DictHandle, word_id: i64) -> Result<Option<FullDefinition>> {
     // Get basic word info
-    let mut stmt = handle.conn.prepare(
-        "SELECT word, pos, language FROM words WHERE id = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT word, pos, language FROM words WHERE id = ?")?;
 
     let word_row = stmt.query_row(params![word_id], |row| {
         Ok((
@@ -168,9 +168,9 @@ pub fn get_full_definition(handle: &DictHandle, word_id: i64) -> Result<Option<F
 
 /// Get all definitions for a word
 fn get_definitions(handle: &DictHandle, word_id: i64) -> Result<Vec<Definition>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT id, definition, examples, tags FROM definitions WHERE word_id = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT id, definition, examples, tags FROM definitions WHERE word_id = ?")?;
 
     let rows = stmt.query_map(params![word_id], |row| {
         let id: i64 = row.get(0)?;
@@ -200,9 +200,9 @@ fn get_definitions(handle: &DictHandle, word_id: i64) -> Result<Vec<Definition>>
 
 /// Get all pronunciations for a word
 fn get_pronunciations(handle: &DictHandle, word_id: i64) -> Result<Vec<Pronunciation>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT id, ipa, audio_url, accent FROM pronunciations WHERE word_id = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT id, ipa, audio_url, accent FROM pronunciations WHERE word_id = ?")?;
 
     let rows = stmt.query_map(params![word_id], |row| {
         Ok(Pronunciation {
@@ -219,9 +219,9 @@ fn get_pronunciations(handle: &DictHandle, word_id: i64) -> Result<Vec<Pronuncia
 
 /// Get etymology for a word
 fn get_etymology(handle: &DictHandle, word_id: i64) -> Result<Option<String>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT etymology_text FROM etymologies WHERE word_id = ? LIMIT 1",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT etymology_text FROM etymologies WHERE word_id = ? LIMIT 1")?;
 
     match stmt.query_row(params![word_id], |row| row.get(0)) {
         Ok(text) => Ok(Some(text)),
@@ -232,9 +232,9 @@ fn get_etymology(handle: &DictHandle, word_id: i64) -> Result<Option<String>> {
 
 /// Get all translations for a word
 fn get_translations(handle: &DictHandle, word_id: i64) -> Result<Vec<Translation>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT id, target_language, translation FROM translations WHERE word_id = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT id, target_language, translation FROM translations WHERE word_id = ?")?;
 
     let rows = stmt.query_map(params![word_id], |row| {
         Ok(Translation {
@@ -406,7 +406,10 @@ pub fn delete_word(conn: &Connection, word_id: i64) -> Result<bool> {
 
 /// Delete a definition
 pub fn delete_definition(conn: &Connection, definition_id: i64) -> Result<bool> {
-    let rows = conn.execute("DELETE FROM definitions WHERE id = ?", params![definition_id])?;
+    let rows = conn.execute(
+        "DELETE FROM definitions WHERE id = ?",
+        params![definition_id],
+    )?;
     Ok(rows > 0)
 }
 
@@ -421,13 +424,19 @@ pub fn delete_pronunciation(conn: &Connection, pronunciation_id: i64) -> Result<
 
 /// Delete an etymology
 pub fn delete_etymology(conn: &Connection, etymology_id: i64) -> Result<bool> {
-    let rows = conn.execute("DELETE FROM etymologies WHERE id = ?", params![etymology_id])?;
+    let rows = conn.execute(
+        "DELETE FROM etymologies WHERE id = ?",
+        params![etymology_id],
+    )?;
     Ok(rows > 0)
 }
 
 /// Delete a translation
 pub fn delete_translation(conn: &Connection, translation_id: i64) -> Result<bool> {
-    let rows = conn.execute("DELETE FROM translations WHERE id = ?", params![translation_id])?;
+    let rows = conn.execute(
+        "DELETE FROM translations WHERE id = ?",
+        params![translation_id],
+    )?;
     Ok(rows > 0)
 }
 
@@ -437,9 +446,9 @@ pub fn delete_translation(conn: &Connection, translation_id: i64) -> Result<bool
 
 /// Get a word by ID (basic info only)
 pub fn get_word(handle: &DictHandle, word_id: i64) -> Result<Option<crate::models::Word>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT id, word, pos, language, etymology_num FROM words WHERE id = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT id, word, pos, language, etymology_num FROM words WHERE id = ?")?;
 
     match stmt.query_row(params![word_id], |row| {
         Ok(crate::models::Word {
@@ -458,9 +467,9 @@ pub fn get_word(handle: &DictHandle, word_id: i64) -> Result<Option<crate::model
 
 /// Get all words matching a specific word string
 pub fn get_words_by_word(handle: &DictHandle, word: &str) -> Result<Vec<crate::models::Word>> {
-    let mut stmt = handle.conn.prepare(
-        "SELECT id, word, pos, language, etymology_num FROM words WHERE word = ?",
-    )?;
+    let mut stmt = handle
+        .conn
+        .prepare("SELECT id, word, pos, language, etymology_num FROM words WHERE word = ?")?;
 
     let rows = stmt.query_map(params![word], |row| {
         Ok(crate::models::Word {
@@ -550,7 +559,7 @@ mod tests {
     #[test]
     fn test_init_database() {
         let (_dir, handle) = setup_test_db();
-        
+
         // Verify tables exist
         let count: i64 = handle
             .conn
@@ -569,7 +578,7 @@ mod tests {
 
         // Insert a word
         let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
-        
+
         // Insert a definition
         insert_definition(
             &handle.conn,
@@ -593,11 +602,11 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
-        
+
         // Update the word
         let updated = update_word(&handle.conn, word_id, "testing", "verb", "English").unwrap();
         assert!(updated);
-        
+
         // Verify the update
         let word = get_word(&handle, word_id).unwrap().unwrap();
         assert_eq!(word.word, "testing");
@@ -609,15 +618,9 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
-        let def_id = insert_definition(
-            &handle.conn,
-            word_id,
-            "Original definition",
-            &[],
-            &[],
-        )
-        .unwrap();
-        
+        let def_id =
+            insert_definition(&handle.conn, word_id, "Original definition", &[], &[]).unwrap();
+
         // Update the definition
         let updated = update_definition(
             &handle.conn,
@@ -628,7 +631,7 @@ mod tests {
         )
         .unwrap();
         assert!(updated);
-        
+
         // Verify
         let full_def = get_full_definition(&handle, word_id).unwrap().unwrap();
         assert_eq!(full_def.definitions[0].text, "Updated definition");
@@ -644,15 +647,15 @@ mod tests {
         insert_pronunciation(&handle.conn, word_id, Some("/test/"), None, Some("US")).unwrap();
         insert_etymology(&handle.conn, word_id, "From Latin testum").unwrap();
         insert_translation(&handle.conn, word_id, "es", "prueba").unwrap();
-        
+
         // Delete the word
         let deleted = delete_word(&handle.conn, word_id).unwrap();
         assert!(deleted);
-        
+
         // Verify everything is deleted
         let full_def = get_full_definition(&handle, word_id).unwrap();
         assert!(full_def.is_none());
-        
+
         // Verify related data is also deleted
         let def_count: i64 = handle
             .conn
@@ -673,7 +676,7 @@ mod tests {
         insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
         insert_word(&handle.conn, "test", "verb", "English", 0).unwrap();
         insert_word(&handle.conn, "other", "noun", "English", 0).unwrap();
-        
+
         let words = get_words_by_word(&handle, "test").unwrap();
         assert_eq!(words.len(), 2);
     }
@@ -685,10 +688,10 @@ mod tests {
         insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
         insert_word(&handle.conn, "world", "noun", "English", 0).unwrap();
         insert_word(&handle.conn, "bonjour", "interjection", "French", 0).unwrap();
-        
+
         let total = get_word_count(&handle).unwrap();
         assert_eq!(total, 3);
-        
+
         let english_count = get_word_count_by_language(&handle, "English").unwrap();
         assert_eq!(english_count, 2);
     }
@@ -698,7 +701,7 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         let word_id = insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
-        
+
         insert_pronunciation(
             &handle.conn,
             word_id,
@@ -707,16 +710,9 @@ mod tests {
             Some("US"),
         )
         .unwrap();
-        
-        insert_pronunciation(
-            &handle.conn,
-            word_id,
-            Some("/həˈləʊ/"),
-            None,
-            Some("UK"),
-        )
-        .unwrap();
-        
+
+        insert_pronunciation(&handle.conn, word_id, Some("/həˈləʊ/"), None, Some("UK")).unwrap();
+
         let full_def = get_full_definition(&handle, word_id).unwrap().unwrap();
         assert_eq!(full_def.pronunciations.len(), 2);
         assert_eq!(full_def.pronunciations[0].ipa.as_deref(), Some("/həˈloʊ/"));
@@ -728,11 +724,11 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         let word_id = insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
-        
+
         insert_translation(&handle.conn, word_id, "es", "hola").unwrap();
         insert_translation(&handle.conn, word_id, "fr", "bonjour").unwrap();
         insert_translation(&handle.conn, word_id, "de", "hallo").unwrap();
-        
+
         let full_def = get_full_definition(&handle, word_id).unwrap().unwrap();
         assert_eq!(full_def.translations.len(), 3);
     }
@@ -743,7 +739,7 @@ mod tests {
 
         // Insert a word
         let word_id = insert_word(&handle.conn, "testing", "noun", "English", 0).unwrap();
-        
+
         // Verify FTS index was updated
         let fts_count: i64 = handle
             .conn
@@ -754,10 +750,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(fts_count, 1);
-        
+
         // Update the word
         update_word(&handle.conn, word_id, "tested", "verb", "English").unwrap();
-        
+
         // Verify FTS was updated
         let old_count: i64 = handle
             .conn
@@ -768,7 +764,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(old_count, 0);
-        
+
         let new_count: i64 = handle
             .conn
             .query_row(
@@ -778,10 +774,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(new_count, 1);
-        
+
         // Delete the word
         delete_word(&handle.conn, word_id).unwrap();
-        
+
         // Verify FTS was updated
         let final_count: i64 = handle
             .conn
