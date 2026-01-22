@@ -38,7 +38,7 @@ private val LightOnBackground = Color(0xFF1C1B1F)
 private val LightSurface = Color(0xFFFFFBF8)
 private val LightOnSurface = Color(0xFF1C1B1F)
 private val LightSurfaceVariant = Color(0xFFEFEBE9)
-private val LightOnSurfaceVariant = Color(0xFF49454F)
+private val LightOnSurfaceVariant = Color(0xFF3D3843)
 private val LightOutline = Color(0xFF79747E)
 
 private val DarkPrimary = Color(0xFFBCAAA4)          // Light brown
