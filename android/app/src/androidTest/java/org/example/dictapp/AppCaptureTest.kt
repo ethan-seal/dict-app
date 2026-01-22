@@ -219,4 +219,108 @@ class AppCaptureTest {
         // Final marker
         captureMarker("DONE")
     }
+
+    /**
+     * Helper to search and view a word definition.
+     * Returns after definition screen is displayed.
+     */
+    private fun searchAndViewWord(searchTerm: String, wordId: Int, markerName: String) {
+        composeTestRule
+            .onNodeWithTag(TestTags.SEARCH_INPUT)
+            .performTextClearance()
+        
+        Thread.sleep(300)
+        typeSlowly(searchTerm)
+        
+        composeTestRule.waitUntil(timeoutMillis = 15000) {
+            composeTestRule
+                .onAllNodesWithTag(TestTags.SEARCH_RESULTS_LIST)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        
+        composeTestRule
+            .onNodeWithTag(TestTags.SEARCH_RESULT_CARD + "_$wordId")
+            .performClick()
+        
+        composeTestRule.waitUntil(timeoutMillis = 15000) {
+            composeTestRule
+                .onAllNodesWithTag(TestTags.DEFINITION_HEADER)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        Thread.sleep(TRANSITION_PAUSE)
+        
+        captureMarker(markerName)
+        Thread.sleep(SCENE_PAUSE)
+    }
+
+    /**
+     * Helper to navigate back from definition to search results.
+     */
+    private fun navigateBack() {
+        composeTestRule
+            .onNodeWithTag(TestTags.BACK_BUTTON)
+            .performClick()
+        
+        composeTestRule.waitUntil(timeoutMillis = 15000) {
+            composeTestRule
+                .onAllNodesWithTag(TestTags.SEARCH_INPUT)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        Thread.sleep(TRANSITION_PAUSE)
+    }
+
+    /**
+     * Capture test for edge cases and outliers.
+     * 
+     * Tests UI handling of:
+     * - Long etymology text (blizzard: 3888 chars)
+     * - Many pronunciations (water: 35 pronunciations)
+     * - Many definitions (draw: 15 definitions)
+     * - Long definition text (parados: 1141 chars)
+     * - No pronunciation (rain cats and dogs)
+     * - No etymology (GDP)
+     * - Many translations (water: 100 translations)
+     */
+    @Test
+    fun captureOutlierCases() {
+        // Wait for initial state
+        composeTestRule.waitUntil(timeoutMillis = 15000) {
+            composeTestRule
+                .onAllNodesWithTag(TestTags.SEARCH_EMPTY_PROMPT)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        Thread.sleep(SCENE_PAUSE)
+
+        // === Outlier 1: Long etymology (blizzard) ===
+        // Tests scrolling/truncation of etymology section
+        searchAndViewWord("blizzard", 13649, "outlier_01_long_etymology")
+        navigateBack()
+
+        // === Outlier 2: Many pronunciations + translations (water) ===
+        // Tests UI with 35 pronunciations and 100 translations
+        searchAndViewWord("water", 563170, "outlier_02_many_pronunciations")
+        navigateBack()
+
+        // === Outlier 3: Many definitions (draw) ===
+        // Tests scrolling through 15 definitions
+        searchAndViewWord("draw", 5361, "outlier_03_many_definitions")
+        navigateBack()
+
+        // === Outlier 4: Long definition text (parados) ===
+        // Tests display of 1141-char definition
+        searchAndViewWord("parados", 170690, "outlier_04_long_definition")
+        navigateBack()
+
+        // === Outlier 5: No pronunciation (rain cats and dogs) ===
+        // Tests empty state for pronunciation section
+        searchAndViewWord("rain", 37, "outlier_05_no_pronunciation")
+        navigateBack()
+
+        // === Outlier 6: No etymology (GDP) ===
+        // Tests empty state for etymology section
+        searchAndViewWord("GDP", 36, "outlier_06_no_etymology")
+        navigateBack()
+
+        captureMarker("outlier_DONE")
+    }
 }
