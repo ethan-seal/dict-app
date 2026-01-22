@@ -24,6 +24,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Benchmark configuration - suppress errors for debug/emulator testing
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,DEBUGGABLE"
+        testInstrumentationRunnerArguments["androidx.benchmark.output.enable"] = "false"
+        
         vectorDrawables {
             useSupportLibrary = true
         }
