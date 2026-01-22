@@ -309,8 +309,36 @@ generate_html_viewer() {
     local has_video="false"
     [ -f "$OUTPUT_DIR/app-flow.mp4" ] && has_video="true"
     
-    # Format timestamp for display
-    local display_ts=$(echo "$TIMESTAMP" | sed 's/_/ /;s/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/')
+    # Format timestamp for display (e.g., "Jan 21, 2026 at 1:32 PM")
+    # TIMESTAMP format: YYYYMMDD_HHMMSS
+    local year=${TIMESTAMP:0:4}
+    local month=${TIMESTAMP:4:2}
+    local day=${TIMESTAMP:6:2}
+    local hour=${TIMESTAMP:9:2}
+    local min=${TIMESTAMP:11:2}
+    
+    # Convert month number to name
+    local month_name
+    case "$month" in
+        01) month_name="Jan" ;; 02) month_name="Feb" ;; 03) month_name="Mar" ;;
+        04) month_name="Apr" ;; 05) month_name="May" ;; 06) month_name="Jun" ;;
+        07) month_name="Jul" ;; 08) month_name="Aug" ;; 09) month_name="Sep" ;;
+        10) month_name="Oct" ;; 11) month_name="Nov" ;; 12) month_name="Dec" ;;
+    esac
+    
+    # Convert to 12-hour format with AM/PM
+    local hour_num=$((10#$hour))
+    local ampm="AM"
+    if [ $hour_num -ge 12 ]; then
+        ampm="PM"
+        [ $hour_num -gt 12 ] && hour_num=$((hour_num - 12))
+    fi
+    [ $hour_num -eq 0 ] && hour_num=12
+    
+    # Remove leading zero from day
+    local day_num=$((10#$day))
+    
+    local display_ts="$month_name $day_num, $year at $hour_num:$min $ampm"
     
     # Start HTML
     cat > "$html_file" << HTMLHEAD
