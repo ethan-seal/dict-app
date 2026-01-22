@@ -218,10 +218,9 @@ private fun WordHeader(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Text(
-                    text = definition.pos,
+                AdaptivePartOfSpeech(
+                    pos = definition.pos,
                     style = MaterialTheme.typography.titleMedium,
-                    fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                     modifier = Modifier.testTag(TestTags.DEFINITION_POS)
                 )

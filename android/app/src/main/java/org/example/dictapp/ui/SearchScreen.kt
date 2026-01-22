@@ -34,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -198,11 +197,10 @@ private fun SearchResultCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Part of speech
-                Text(
-                    text = result.pos,
+                // Part of speech - uses full name when space allows
+                AdaptivePartOfSpeech(
+                    pos = result.pos,
                     style = MaterialTheme.typography.labelMedium,
-                    fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.primary
                 )
             }

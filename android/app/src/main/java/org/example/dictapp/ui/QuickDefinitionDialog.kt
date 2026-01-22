@@ -183,12 +183,11 @@ private fun DefinitionContent(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
     ) {
-        // Part of speech
-        Text(
-            text = definition.pos,
+        // Part of speech - uses full name when space allows
+        AdaptivePartOfSpeech(
+            pos = definition.pos,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontStyle = FontStyle.Italic
+            color = MaterialTheme.colorScheme.primary
         )
 
         // Pronunciation (if available)
