@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +50,7 @@ import org.example.dictapp.viewmodel.SearchState
 fun SearchScreen(
     viewModel: DictViewModel,
     onWordClick: (Long) -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val query by viewModel.query.collectAsState()
@@ -59,6 +61,18 @@ fun SearchScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Dictionary") },
+                actions = {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier.testTag(TestTags.SETTINGS_BUTTON)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer

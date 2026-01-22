@@ -28,6 +28,7 @@ import androidx.navigation.navArgument
 import org.example.dictapp.ui.DefinitionScreen
 import org.example.dictapp.ui.DownloadScreen
 import org.example.dictapp.ui.SearchScreen
+import org.example.dictapp.ui.SettingsScreen
 import org.example.dictapp.ui.theme.DictAppTheme
 import org.example.dictapp.viewmodel.DictViewModel
 
@@ -75,6 +76,8 @@ object Routes {
     const val DOWNLOAD = "download"
     const val SEARCH = "search"
     const val DEFINITION = "definition/{wordId}"
+    const val SETTINGS = "settings"
+    const val DESIGN_SYSTEM = "design_system"
 
     fun definition(wordId: Long) = "definition/$wordId"
 }
@@ -143,8 +146,33 @@ fun DictApp(
                 viewModel = viewModel,
                 onWordClick = { wordId ->
                     navController.navigate(Routes.definition(wordId))
+                },
+                onSettingsClick = {
+                    navController.navigate(Routes.SETTINGS)
                 }
             )
+        }
+        
+        // Settings screen
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToDesignSystem = {
+                    navController.navigate(Routes.DESIGN_SYSTEM)
+                }
+            )
+        }
+        
+        // Design system showcase (placeholder)
+        composable(Routes.DESIGN_SYSTEM) {
+            // TODO: Implement DesignSystemScreen
+            // For now, just show a placeholder
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.Text("Design System Showcase - Coming Soon")
+            }
         }
 
         // Definition detail screen

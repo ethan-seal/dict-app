@@ -30,4 +30,11 @@ object TestTags {
     
     // General
     const val LOADING_INDICATOR = "loading_indicator"
+    
+    // Settings screen
+    const val SETTINGS_BUTTON = "settings_button"
+    const val SETTINGS_SCREEN = "settings_screen"
+    const val SETTINGS_BACK_BUTTON = "settings_back_button"
+    const val SETTINGS_ENGLISH_VARIANT_SELECTOR = "settings_english_variant_selector"
+    const val SETTINGS_DESIGN_SYSTEM_ITEM = "settings_design_system_item"
 }
