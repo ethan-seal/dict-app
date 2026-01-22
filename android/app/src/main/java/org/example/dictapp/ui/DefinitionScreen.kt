@@ -150,7 +150,10 @@ private fun DefinitionContent(
         // Etymology (if available)
         definition.etymology?.let { etymology ->
             item {
-                EtymologySection(etymology = etymology)
+                EtymologySection(
+                    etymology = etymology,
+                    modifier = Modifier.testTag(TestTags.ETYMOLOGY_SECTION)
+                )
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -160,7 +163,8 @@ private fun DefinitionContent(
             Text(
                 text = "Definitions",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag(TestTags.DEFINITIONS_SECTION)
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -168,7 +172,8 @@ private fun DefinitionContent(
         itemsIndexed(definition.definitions) { index, def ->
             DefinitionCard(
                 index = index + 1,
-                definition = def
+                definition = def,
+                modifier = Modifier.testTag("${TestTags.DEFINITION_CARD}_$index")
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -177,7 +182,10 @@ private fun DefinitionContent(
         if (definition.translations.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                TranslationsSection(translations = definition.translations)
+                TranslationsSection(
+                    translations = definition.translations,
+                    modifier = Modifier.testTag(TestTags.TRANSLATIONS_SECTION)
+                )
             }
         }
     }

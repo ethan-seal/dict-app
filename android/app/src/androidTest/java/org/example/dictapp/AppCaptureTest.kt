@@ -6,8 +6,10 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -142,6 +144,12 @@ class AppCaptureTest {
         captureMarker("03_definition_hello")
         Thread.sleep(SCENE_PAUSE)
 
+        // === Scene 3b: Scroll to show definitions with examples ===
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("03b_hello_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
+
         // === Scene 4: Navigate back ===
         composeTestRule
             .onNodeWithTag(TestTags.BACK_BUTTON)
@@ -188,6 +196,18 @@ class AppCaptureTest {
         
         captureMarker("06_definition_apple")
         Thread.sleep(SCENE_PAUSE)
+
+        // === Scene 6b: Scroll to show definitions with examples ===
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("06b_apple_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
+
+        // === Scene 6c: Scroll to show translations (if present) ===
+        if (scrollToSection(TestTags.TRANSLATIONS_SECTION)) {
+            captureMarker("06c_apple_translations")
+            Thread.sleep(SCENE_PAUSE)
+        }
 
         // === Scene 7: Show no results case ===
         composeTestRule
@@ -254,6 +274,30 @@ class AppCaptureTest {
     }
 
     /**
+     * Helper to scroll to a specific section in the definition screen.
+     * Returns true if the section was found and scrolled to.
+     */
+    private fun scrollToSection(testTag: String): Boolean {
+        return try {
+            composeTestRule
+                .onNodeWithTag(TestTags.DEFINITION_CONTENT)
+                .performScrollToNode(hasTestTag(testTag))
+            Thread.sleep(TRANSITION_PAUSE)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Helper to scroll to a definition card by index.
+     * Returns true if the card was found and scrolled to.
+     */
+    private fun scrollToDefinitionCard(index: Int): Boolean {
+        return scrollToSection("${TestTags.DEFINITION_CARD}_$index")
+    }
+
+    /**
      * Helper to navigate back from definition to search results.
      */
     private fun navigateBack() {
@@ -294,31 +338,71 @@ class AppCaptureTest {
         // === Outlier 1: Long etymology (blizzard) ===
         // Tests scrolling/truncation of etymology section
         searchAndViewWord("blizzard", 13649, "outlier_01_long_etymology")
+        // Scroll to show definitions section
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("outlier_01b_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         // === Outlier 2: Many pronunciations + translations (water) ===
         // Tests UI with 35 pronunciations and 100 translations
         searchAndViewWord("water", 563170, "outlier_02_many_pronunciations")
+        // Scroll to show definitions
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("outlier_02b_water_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
+        // Scroll to show translations
+        if (scrollToSection(TestTags.TRANSLATIONS_SECTION)) {
+            captureMarker("outlier_02c_many_translations")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         // === Outlier 3: Many definitions (draw) ===
         // Tests scrolling through 15 definitions
         searchAndViewWord("draw", 5361, "outlier_03_many_definitions")
+        // Scroll to show middle definitions (around definition 5)
+        if (scrollToDefinitionCard(4)) {
+            captureMarker("outlier_03b_draw_definitions_mid")
+            Thread.sleep(SCENE_PAUSE)
+        }
+        // Scroll to show later definitions (around definition 10)
+        if (scrollToDefinitionCard(9)) {
+            captureMarker("outlier_03c_draw_definitions_end")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         // === Outlier 4: Long definition text (parados) ===
         // Tests display of 1141-char definition
         searchAndViewWord("parados", 170690, "outlier_04_long_definition")
+        // Scroll to show the full definition card
+        if (scrollToDefinitionCard(0)) {
+            captureMarker("outlier_04b_long_definition_scrolled")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         // === Outlier 5: No pronunciation (rain cats and dogs) ===
         // Tests empty state for pronunciation section
         searchAndViewWord("rain", 37, "outlier_05_no_pronunciation")
+        // Scroll to definitions
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("outlier_05b_rain_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         // === Outlier 6: No etymology (GDP) ===
         // Tests empty state for etymology section
         searchAndViewWord("GDP", 36, "outlier_06_no_etymology")
+        // Scroll to definitions
+        if (scrollToSection(TestTags.DEFINITIONS_SECTION)) {
+            captureMarker("outlier_06b_gdp_definitions")
+            Thread.sleep(SCENE_PAUSE)
+        }
         navigateBack()
 
         captureMarker("outlier_DONE")

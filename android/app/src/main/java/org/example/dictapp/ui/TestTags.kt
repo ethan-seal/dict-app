@@ -22,6 +22,12 @@ object TestTags {
     const val DEFINITION_CONTENT = "definition_content"
     const val BACK_BUTTON = "back_button"
     
+    // Definition screen sections
+    const val ETYMOLOGY_SECTION = "etymology_section"
+    const val DEFINITIONS_SECTION = "definitions_section"
+    const val DEFINITION_CARD = "definition_card"
+    const val TRANSLATIONS_SECTION = "translations_section"
+    
     // General
     const val LOADING_INDICATOR = "loading_indicator"
 }
