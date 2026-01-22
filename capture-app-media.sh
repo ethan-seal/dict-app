@@ -309,6 +309,36 @@ generate_html_viewer() {
     local has_video="false"
     [ -f "$OUTPUT_DIR/app-flow.mp4" ] && has_video="true"
     
+    # Get git commit info
+    local commit_hash=""
+    local commit_html=""
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        commit_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+        if [ -n "$commit_hash" ]; then
+            # Check for dirty state (uncommitted changes)
+            if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+                commit_hash="${commit_hash}+"
+            fi
+            
+            # Try to get GitHub URL for linking
+            local remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+            local github_url=""
+            if echo "$remote_url" | grep -qE 'github\.com[:/]'; then
+                # Extract owner/repo using sed (more portable than bash regex)
+                local owner_repo=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]([^/]+)/([^/]+).*|\1/\2|' | sed 's/\.git$//')
+                local owner="${owner_repo%%/*}"
+                local repo="${owner_repo##*/}"
+                github_url="https://github.com/$owner/$repo/commit/${commit_hash%+}"
+            fi
+            
+            if [ -n "$github_url" ]; then
+                commit_html="<div class=\"commit\"><a href=\"$github_url\" target=\"_blank\" rel=\"noopener\">commit: $commit_hash</a></div>"
+            else
+                commit_html="<div class=\"commit\">commit: $commit_hash</div>"
+            fi
+        fi
+    fi
+    
     # Format timestamp for display (e.g., "Jan 21, 2026 at 1:32 PM")
     # TIMESTAMP format: YYYYMMDD_HHMMSS
     local year=${TIMESTAMP:0:4}
@@ -366,6 +396,9 @@ generate_html_viewer() {
         }
         h1 { font-size: 1.5rem; font-weight: 500; margin-bottom: 0.5rem; }
         .timestamp { color: #888; font-size: 0.9rem; }
+        .commit { color: #666; font-size: 0.8rem; font-family: monospace; margin-top: 0.25rem; }
+        .commit a { color: #6a9fb5; text-decoration: none; }
+        .commit a:hover { text-decoration: underline; }
         .video-section { margin-bottom: 2rem; text-align: center; }
         .video-section h2, .screenshots-section h2 {
             font-size: 1rem;
@@ -462,6 +495,7 @@ generate_html_viewer() {
         <header>
             <h1>Dict App - UI Capture</h1>
             <div class="timestamp">$display_ts</div>
+            $commit_html
         </header>
 HTMLHEAD
 
