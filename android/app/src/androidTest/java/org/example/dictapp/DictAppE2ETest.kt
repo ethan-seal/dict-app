@@ -66,8 +66,8 @@ class DictAppE2ETest {
             .onNodeWithTag(TestTags.SEARCH_INPUT)
             .performTextInput(text)
         
-        // Wait for debounce (300ms in ViewModel) and search to complete
-        Thread.sleep(500)
+        // Wait for debounce (50ms in ViewModel) and search to complete
+        Thread.sleep(150)
         composeTestRule.waitForIdle()
     }
 

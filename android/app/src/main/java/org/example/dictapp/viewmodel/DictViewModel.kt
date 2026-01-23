@@ -140,7 +140,7 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
         // Set up debounced search
         viewModelScope.launch {
             _query
-                .debounce(300) // Wait 300ms after last keystroke
+                .debounce(50) // Wait 50ms after last keystroke
                 .distinctUntilChanged()
                 .filter { it.isNotBlank() }
                 .collect { query ->
