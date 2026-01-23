@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -85,10 +86,10 @@ fun AdaptivePartOfSpeech(
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current,
     color: Color = Color.Unspecified,
-    fontStyle: FontStyle = FontStyle.Italic
+    fontStyle: FontStyle = FontStyle.Italic,
+    textMeasurer: TextMeasurer = rememberTextMeasurer()
 ) {
     val fullName = remember(pos) { PartOfSpeechMapping.getFullName(pos) }
-    val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
     BoxWithConstraints(modifier = modifier) {
