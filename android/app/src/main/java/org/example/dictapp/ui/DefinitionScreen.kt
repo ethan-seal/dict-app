@@ -85,6 +85,21 @@ fun DefinitionScreen(
                         )
                     }
                 },
+                actions = {
+                    when (val state = definitionState) {
+                        is DefinitionState.Success -> {
+                            if (state.definition.langCode.isNotEmpty()) {
+                                Text(
+                                    text = state.definition.langCode,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(end = 16.dp)
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -276,13 +291,7 @@ private fun WordHeader(
                 }
             }
 
-            // Language
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = definition.language,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-            )
+
         }
     }
 }

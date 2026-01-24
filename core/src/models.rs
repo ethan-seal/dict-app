@@ -53,6 +53,8 @@ pub struct FullDefinition {
     pub pos: String,
     /// Language of the word
     pub language: String,
+    /// Language code (e.g. "en", "fr")
+    pub lang_code: String,
     /// List of definitions/meanings
     pub definitions: Vec<Definition>,
     /// Pronunciation information
@@ -222,11 +224,12 @@ impl SearchResult {
 
 impl FullDefinition {
     /// Create a new empty FullDefinition
-    pub fn new(word: String, pos: String, language: String) -> Self {
+    pub fn new(word: String, pos: String, language: String, lang_code: String) -> Self {
         Self {
             word,
             pos,
             language,
+            lang_code,
             definitions: Vec::new(),
             pronunciations: Vec::new(),
             etymology: None,

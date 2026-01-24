@@ -219,7 +219,14 @@ fn import_entry_with_stats(conn: &Connection, entry: &RawWordEntry) -> Result<En
 
     // Insert the word
     let etymology_num = entry.etymology_number.unwrap_or(0);
-    let word_id = insert_word(conn, &entry.word, &entry.pos, &entry.lang, etymology_num)?;
+    let word_id = insert_word(
+        conn,
+        &entry.word,
+        &entry.pos,
+        &entry.lang,
+        &entry.lang_code,
+        etymology_num,
+    )?;
 
     // Insert definitions from senses
     for sense in &entry.senses {

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS words (
     word TEXT NOT NULL,
     pos TEXT NOT NULL,
     language TEXT NOT NULL,
+    lang_code TEXT NOT NULL DEFAULT '',
     etymology_num INTEGER DEFAULT 0
 );
 
@@ -133,23 +134,24 @@ pub fn get_full_definition(handle: &DictHandle, word_id: i64) -> Result<Option<F
     // Get basic word info
     let mut stmt = handle
         .conn
-        .prepare("SELECT word, pos, language FROM words WHERE id = ?")?;
+        .prepare("SELECT word, pos, language, lang_code FROM words WHERE id = ?")?;
 
     let word_row = stmt.query_row(params![word_id], |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
         ))
     });
 
-    let (word, pos, language) = match word_row {
+    let (word, pos, language, lang_code) = match word_row {
         Ok(row) => row,
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(e) => return Err(e.into()),
     };
 
-    let mut full_def = FullDefinition::new(word, pos, language);
+    let mut full_def = FullDefinition::new(word, pos, language, lang_code);
 
     // Get definitions
     full_def.definitions = get_definitions(handle, word_id)?;
@@ -254,11 +256,12 @@ pub fn insert_word(
     word: &str,
     pos: &str,
     language: &str,
+    lang_code: &str,
     etymology_num: i32,
 ) -> Result<i64> {
     conn.execute(
-        "INSERT INTO words (word, pos, language, etymology_num) VALUES (?, ?, ?, ?)",
-        params![word, pos, language, etymology_num],
+        "INSERT INTO words (word, pos, language, lang_code, etymology_num) VALUES (?, ?, ?, ?, ?)",
+        params![word, pos, language, lang_code, etymology_num],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -577,7 +580,7 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         // Insert a word
-        let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
+        let word_id = insert_word(&handle.conn, "test", "noun", "English", "en", 0).unwrap();
 
         // Insert a definition
         insert_definition(
@@ -601,7 +604,7 @@ mod tests {
     fn test_update_word() {
         let (_dir, handle) = setup_test_db();
 
-        let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
+        let word_id = insert_word(&handle.conn, "test", "noun", "English", "en", 0).unwrap();
 
         // Update the word
         let updated = update_word(&handle.conn, word_id, "testing", "verb", "English").unwrap();
@@ -617,7 +620,7 @@ mod tests {
     fn test_update_definition() {
         let (_dir, handle) = setup_test_db();
 
-        let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
+        let word_id = insert_word(&handle.conn, "test", "noun", "English", "en", 0).unwrap();
         let def_id =
             insert_definition(&handle.conn, word_id, "Original definition", &[], &[]).unwrap();
 
@@ -642,7 +645,7 @@ mod tests {
     fn test_delete_word_cascades() {
         let (_dir, handle) = setup_test_db();
 
-        let word_id = insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
+        let word_id = insert_word(&handle.conn, "test", "noun", "English", "en", 0).unwrap();
         insert_definition(&handle.conn, word_id, "A definition", &[], &[]).unwrap();
         insert_pronunciation(&handle.conn, word_id, Some("/test/"), None, Some("US")).unwrap();
         insert_etymology(&handle.conn, word_id, "From Latin testum").unwrap();
@@ -673,9 +676,9 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         // Insert same word with different parts of speech
-        insert_word(&handle.conn, "test", "noun", "English", 0).unwrap();
-        insert_word(&handle.conn, "test", "verb", "English", 0).unwrap();
-        insert_word(&handle.conn, "other", "noun", "English", 0).unwrap();
+        insert_word(&handle.conn, "test", "noun", "English", "en", 0).unwrap();
+        insert_word(&handle.conn, "test", "verb", "English", "en", 0).unwrap();
+        insert_word(&handle.conn, "other", "noun", "English", "en", 0).unwrap();
 
         let words = get_words_by_word(&handle, "test").unwrap();
         assert_eq!(words.len(), 2);
@@ -685,9 +688,9 @@ mod tests {
     fn test_get_word_count() {
         let (_dir, handle) = setup_test_db();
 
-        insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
-        insert_word(&handle.conn, "world", "noun", "English", 0).unwrap();
-        insert_word(&handle.conn, "bonjour", "interjection", "French", 0).unwrap();
+        insert_word(&handle.conn, "hello", "interjection", "English", "en", 0).unwrap();
+        insert_word(&handle.conn, "world", "noun", "English", "en", 0).unwrap();
+        insert_word(&handle.conn, "bonjour", "interjection", "French", "fr", 0).unwrap();
 
         let total = get_word_count(&handle).unwrap();
         assert_eq!(total, 3);
@@ -700,7 +703,8 @@ mod tests {
     fn test_pronunciations() {
         let (_dir, handle) = setup_test_db();
 
-        let word_id = insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
+        let word_id =
+            insert_word(&handle.conn, "hello", "interjection", "English", "en", 0).unwrap();
 
         insert_pronunciation(
             &handle.conn,
@@ -723,7 +727,8 @@ mod tests {
     fn test_translations() {
         let (_dir, handle) = setup_test_db();
 
-        let word_id = insert_word(&handle.conn, "hello", "interjection", "English", 0).unwrap();
+        let word_id =
+            insert_word(&handle.conn, "hello", "interjection", "English", "en", 0).unwrap();
 
         insert_translation(&handle.conn, word_id, "es", "hola").unwrap();
         insert_translation(&handle.conn, word_id, "fr", "bonjour").unwrap();
@@ -738,7 +743,7 @@ mod tests {
         let (_dir, handle) = setup_test_db();
 
         // Insert a word
-        let word_id = insert_word(&handle.conn, "testing", "noun", "English", 0).unwrap();
+        let word_id = insert_word(&handle.conn, "testing", "noun", "English", "en", 0).unwrap();
 
         // Verify FTS index was updated
         let fts_count: i64 = handle

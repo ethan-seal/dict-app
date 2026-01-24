@@ -447,7 +447,7 @@ mod tests {
         ];
 
         for (word, pos, definition) in words {
-            let word_id = insert_word(&handle.conn, word, pos, "English", 0).unwrap();
+            let word_id = insert_word(&handle.conn, word, pos, "English", "en", 0).unwrap();
             insert_definition(&handle.conn, word_id, definition, &[], &[]).unwrap();
         }
     }
