@@ -36,9 +36,7 @@ object DictCore {
 
     private val gson = Gson()
 
-    private companion object {
-        private val SEARCH_RESULT_LIST_TYPE = object : TypeToken<List<SearchResult>>() {}.type
-    }
+    private val SEARCH_RESULT_LIST_TYPE = object : TypeToken<List<SearchResult>>() {}.type
 
     init {
         System.loadLibrary("dict_core")
