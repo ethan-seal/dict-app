@@ -242,8 +242,6 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun performSearch(query: String) {
         viewModelScope.launch {
-            _searchState.value = SearchState.Loading
-
             try {
                 val results = withContext(Dispatchers.IO) {
                     DictCore.searchParsed(query, 50)

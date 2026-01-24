@@ -15,11 +15,18 @@
 -keep class org.example.dictapp.Pronunciation { *; }
 -keep class org.example.dictapp.Translation { *; }
 
+# Keep zstd-jni classes (fields accessed via JNI from native code)
+-keep class com.github.luben.zstd.** { *; }
+
+# Keep Apache Commons Compress zstd wrapper
+-keep class org.apache.commons.compress.compressors.zstandard.** { *; }
+
 # Keep Gson serialization
 -keepattributes Signature
 -keepattributes *Annotation*
 -dontwarn sun.misc.**
 -keep class com.google.gson.** { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
 -keep class * implements com.google.gson.TypeAdapterFactory
 -keep class * implements com.google.gson.JsonSerializer
 -keep class * implements com.google.gson.JsonDeserializer
