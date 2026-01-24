@@ -124,14 +124,14 @@ data class FullDefinition(
     val word: String,
     val pos: String,
     val language: String,
-    val lang_code: String = "",
+    val lang_code: String? = null,
     val definitions: List<Definition>,
     val pronunciations: List<Pronunciation>,
     val etymology: String?,
     val translations: List<Translation>
 ) {
     /** Language code uppercased (e.g. "EN") */
-    val langCode: String get() = lang_code.uppercase()
+    val langCode: String get() = lang_code?.uppercase().orEmpty()
 }
 
 /**
