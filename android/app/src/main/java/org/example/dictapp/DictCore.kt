@@ -1,6 +1,7 @@
 package org.example.dictapp
 
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 
 /**
@@ -150,7 +151,7 @@ data class Definition(
 data class Pronunciation(
     val id: Long,
     val ipa: String?,
-    val audioUrl: String?,
+    @SerializedName("audio_url") val audioUrl: String?,
     val accent: String?
 )
 
@@ -159,6 +160,6 @@ data class Pronunciation(
  */
 data class Translation(
     val id: Long,
-    val targetLanguage: String,
+    @SerializedName("target_language") val targetLanguage: String,
     val translation: String
 )
