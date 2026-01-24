@@ -26,6 +26,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.example.dictapp.ui.DefinitionScreen
+import org.example.dictapp.ui.DesignSystemScreen
 import org.example.dictapp.ui.DownloadScreen
 import org.example.dictapp.ui.SearchScreen
 import org.example.dictapp.ui.SettingsScreen
@@ -164,16 +165,11 @@ fun DictApp(
             )
         }
         
-        // Design system showcase (placeholder)
+        // Design system showcase
         composable(Routes.DESIGN_SYSTEM) {
-            // TODO: Implement DesignSystemScreen
-            // For now, just show a placeholder
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.material3.Text("Design System Showcase - Coming Soon")
-            }
+            DesignSystemScreen(
+                onBack = { navController.popBackStack() }
+            )
         }
 
         // Definition detail screen
