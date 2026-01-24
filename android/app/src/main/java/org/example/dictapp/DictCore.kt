@@ -36,6 +36,10 @@ object DictCore {
 
     private val gson = Gson()
 
+    private companion object {
+        private val SEARCH_RESULT_LIST_TYPE = object : TypeToken<List<SearchResult>>() {}.type
+    }
+
     init {
         System.loadLibrary("dict_core")
     }
@@ -82,8 +86,7 @@ object DictCore {
     fun searchParsed(query: String, limit: Int = 50, offset: Int = 0): List<SearchResult> {
         val json = search(query, limit, offset) ?: return emptyList()
         return try {
-            val type = object : TypeToken<List<SearchResult>>() {}.type
-            gson.fromJson(json, type)
+            gson.fromJson(json, SEARCH_RESULT_LIST_TYPE)
         } catch (e: Exception) {
             emptyList()
         }
