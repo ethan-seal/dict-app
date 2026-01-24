@@ -40,9 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.example.dictapp.SearchResult
@@ -169,7 +167,6 @@ private fun SearchResultsList(
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val textMeasurer = rememberTextMeasurer()
     val listState = rememberLazyListState()
 
     // Detect when the user scrolls near the end
@@ -198,8 +195,7 @@ private fun SearchResultsList(
         ) { result ->
             SearchResultCard(
                 result = result,
-                onClick = { onResultClick(result.id) },
-                textMeasurer = textMeasurer
+                onClick = { onResultClick(result.id) }
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -226,7 +222,6 @@ private fun SearchResultsList(
 private fun SearchResultCard(
     result: SearchResult,
     onClick: () -> Unit,
-    textMeasurer: TextMeasurer,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -260,8 +255,7 @@ private fun SearchResultCard(
                 AdaptivePartOfSpeech(
                     pos = result.pos,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    textMeasurer = textMeasurer
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 

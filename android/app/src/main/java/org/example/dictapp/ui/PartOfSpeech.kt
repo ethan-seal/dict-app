@@ -1,17 +1,13 @@
 package org.example.dictapp.ui
 
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.rememberTextMeasurer
 
 /**
  * Mapping of abbreviated parts of speech to their full names.
@@ -71,8 +67,8 @@ object PartOfSpeechMapping {
 }
 
 /**
- * A composable that displays part of speech, using the full name when there's enough space,
- * and falling back to the abbreviation when space is limited.
+ * A composable that displays the full name of a part of speech.
+ * POS labels are short (max ~12 chars like "interjection") so they always fit.
  *
  * @param pos The part of speech (can be abbreviated or full)
  * @param modifier Modifier for the text
@@ -86,35 +82,15 @@ fun AdaptivePartOfSpeech(
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current,
     color: Color = Color.Unspecified,
-    fontStyle: FontStyle = FontStyle.Italic,
-    textMeasurer: TextMeasurer = rememberTextMeasurer()
+    fontStyle: FontStyle = FontStyle.Italic
 ) {
-    val fullName = remember(pos) { PartOfSpeechMapping.getFullName(pos) }
-    val density = LocalDensity.current
+    val displayText = remember(pos) { PartOfSpeechMapping.getFullName(pos) }
 
-    BoxWithConstraints(modifier = modifier) {
-        val maxWidthPx = with(density) { maxWidth.toPx() }
-
-        // Measure the full name width
-        val fullTextWidth = remember(fullName, style, fontStyle) {
-            textMeasurer.measure(
-                text = fullName,
-                style = style.copy(fontStyle = fontStyle)
-            ).size.width.toFloat()
-        }
-
-        // Use full name if it fits, otherwise use abbreviation
-        val displayText = if (fullTextWidth <= maxWidthPx) {
-            fullName
-        } else {
-            pos
-        }
-
-        Text(
-            text = displayText,
-            style = style,
-            color = color,
-            fontStyle = fontStyle
-        )
-    }
+    Text(
+        text = displayText,
+        modifier = modifier,
+        style = style,
+        color = color,
+        fontStyle = fontStyle
+    )
 }
