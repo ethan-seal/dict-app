@@ -19,11 +19,28 @@ const MIN_FUZZY_QUERY_LENGTH: usize = 3;
 /// Search for words matching a query using FTS5
 ///
 /// Returns results ordered by relevance, with exact matches first.
+/// The `offset` parameter skips that many results from the beginning of the
+/// sorted result set, enabling pagination.
 pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<SearchResult>> {
+    search_words_offset(handle, query, limit, 0)
+}
+
+/// Search with offset for pagination.
+///
+/// Fetches up to `limit` results starting at `offset` in the relevance-sorted list.
+pub fn search_words_offset(
+    handle: &DictHandle,
+    query: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<SearchResult>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
     }
+
+    // We need to gather enough results to satisfy offset + limit
+    let total_needed = offset.saturating_add(limit);
 
     // Normalize query for comparison
     let query_lower = query.to_lowercase();
@@ -35,15 +52,15 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
     let mut results = Vec::new();
 
     // 1. Exact matches (highest priority, score = 0)
-    let exact_results = search_exact(handle, query, limit)?;
+    let exact_results = search_exact(handle, query, total_needed)?;
     for mut result in exact_results {
         result.score = 0.0;
         results.push(result);
     }
 
-    if (results.len() as u32) < limit {
+    if (results.len() as u32) < total_needed {
         // 2. Prefix matches (score based on length difference)
-        let remaining = limit - results.len() as u32;
+        let remaining = total_needed - results.len() as u32;
         let prefix_results = search_prefix(handle, query, remaining)?;
 
         // Add only results not already in the list
@@ -57,9 +74,9 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
         }
     }
 
-    if (results.len() as u32) < limit {
+    if (results.len() as u32) < total_needed {
         // 3. FTS matches (score from FTS5 rank)
-        let remaining = limit - results.len() as u32;
+        let remaining = total_needed - results.len() as u32;
         let fts_results = search_fts(handle, &fts_query, remaining)?;
 
         for mut result in fts_results {
@@ -72,8 +89,8 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
     }
 
     // 4. Fuzzy matches (only if query is long enough and we need more results)
-    if (results.len() as u32) < limit && query_lower.len() >= MIN_FUZZY_QUERY_LENGTH {
-        let remaining = limit - results.len() as u32;
+    if (results.len() as u32) < total_needed && query_lower.len() >= MIN_FUZZY_QUERY_LENGTH {
+        let remaining = total_needed - results.len() as u32;
         let fuzzy_results = search_fuzzy(handle, &query_lower, remaining)?;
 
         for result in fuzzy_results {
@@ -90,8 +107,10 @@ pub fn search_words(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Truncate to limit
-    results.truncate(limit as usize);
+    // Apply offset and limit
+    let start = std::cmp::min(offset as usize, results.len());
+    let end = std::cmp::min(start + limit as usize, results.len());
+    let results = results[start..end].to_vec();
 
     Ok(results)
 }

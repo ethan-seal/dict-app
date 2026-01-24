@@ -118,6 +118,30 @@ pub fn search(handle: &DictHandle, query: &str, limit: u32) -> Vec<SearchResult>
     search::search_words(handle, query, limit).unwrap_or_default()
 }
 
+/// Search for words with offset-based pagination
+///
+/// Same as `search` but skips the first `offset` results, enabling
+/// paginated fetching of search results.
+///
+/// # Arguments
+///
+/// * `handle` - The dictionary handle from `init()`
+/// * `query` - The search query string
+/// * `limit` - Maximum number of results to return
+/// * `offset` - Number of results to skip from the beginning
+///
+/// # Returns
+///
+/// A vector of `SearchResult` items for the requested page.
+pub fn search_with_offset(
+    handle: &DictHandle,
+    query: &str,
+    limit: u32,
+    offset: u32,
+) -> Vec<SearchResult> {
+    search::search_words_offset(handle, query, limit, offset).unwrap_or_default()
+}
+
 /// Get the full definition for a word by its ID
 ///
 /// Retrieves the complete definition including all meanings, pronunciations,

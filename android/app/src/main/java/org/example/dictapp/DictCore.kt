@@ -53,9 +53,10 @@ object DictCore {
      *
      * @param query Search query string
      * @param limit Maximum number of results to return
+     * @param offset Number of results to skip (for pagination)
      * @return JSON string containing array of SearchResult, or null on error
      */
-    external fun search(query: String, limit: Int): String?
+    external fun search(query: String, limit: Int, offset: Int): String?
 
     /**
      * Get the full definition for a word.
@@ -75,10 +76,11 @@ object DictCore {
      *
      * @param query Search query string
      * @param limit Maximum number of results
+     * @param offset Number of results to skip (for pagination)
      * @return List of SearchResult objects
      */
-    fun searchParsed(query: String, limit: Int = 50): List<SearchResult> {
-        val json = search(query, limit) ?: return emptyList()
+    fun searchParsed(query: String, limit: Int = 50, offset: Int = 0): List<SearchResult> {
+        val json = search(query, limit, offset) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<SearchResult>>() {}.type
             gson.fromJson(json, type)

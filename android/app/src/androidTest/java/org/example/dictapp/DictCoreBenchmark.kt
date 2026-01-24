@@ -129,7 +129,7 @@ class DictCoreBenchmark {
         ensureInitialized()
 
         benchmarkRule.measureRepeated {
-            val json = DictCore.search("hello", 50)
+            val json = DictCore.search("hello", 50, 0)
             // Prevent dead code elimination
             check(json != null && json.isNotEmpty())
         }
@@ -140,7 +140,7 @@ class DictCoreBenchmark {
         ensureInitialized()
 
         benchmarkRule.measureRepeated {
-            val json = DictCore.search("hel", 50)
+            val json = DictCore.search("hel", 50, 0)
             check(json != null)
         }
     }
@@ -150,7 +150,7 @@ class DictCoreBenchmark {
         ensureInitialized()
 
         benchmarkRule.measureRepeated {
-            val json = DictCore.search("xyzzynonexistent", 50)
+            val json = DictCore.search("xyzzynonexistent", 50, 0)
             // May return empty array JSON
         }
     }
@@ -161,7 +161,7 @@ class DictCoreBenchmark {
 
         benchmarkRule.measureRepeated {
             // "helo" should fuzzy match "hello"
-            val json = DictCore.search("helo", 50)
+            val json = DictCore.search("helo", 50, 0)
             check(json != null)
         }
     }
@@ -300,11 +300,11 @@ class DictCoreBenchmark {
         ensureInitialized()
 
         benchmarkRule.measureRepeated {
-            DictCore.search("h", 10)
-            DictCore.search("he", 10)
-            DictCore.search("hel", 10)
-            DictCore.search("hell", 10)
-            DictCore.search("hello", 10)
+            DictCore.search("h", 10, 0)
+            DictCore.search("he", 10, 0)
+            DictCore.search("hel", 10, 0)
+            DictCore.search("hell", 10, 0)
+            DictCore.search("hello", 10, 0)
         }
     }
 
@@ -373,7 +373,7 @@ class DictCoreBenchmark {
 
         benchmarkRule.measureRepeated {
             repeat(100) { i ->
-                DictCore.search(queries[i % queries.size], 20)
+                DictCore.search(queries[i % queries.size], 20, 0)
             }
         }
     }

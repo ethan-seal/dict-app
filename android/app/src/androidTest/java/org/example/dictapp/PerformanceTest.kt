@@ -132,7 +132,7 @@ class PerformanceTest {
     @Test
     fun search_exactMatch_underTarget() {
         val medianMs = measureOperation("search_exactMatch") {
-            val json = DictCore.search("hello", 50)
+            val json = DictCore.search("hello", 50, 0)
             assertThat(json).isNotNull()
         }
 
@@ -143,7 +143,7 @@ class PerformanceTest {
     @Test
     fun search_prefix_underTarget() {
         val medianMs = measureOperation("search_prefix") {
-            val json = DictCore.search("hel", 50)
+            val json = DictCore.search("hel", 50, 0)
             assertThat(json).isNotNull()
         }
 
@@ -154,7 +154,7 @@ class PerformanceTest {
     @Test
     fun search_fuzzyTypo_underTarget() {
         val medianMs = measureOperation("search_fuzzyTypo") {
-            val json = DictCore.search("helo", 50) // typo for "hello"
+            val json = DictCore.search("helo", 50, 0) // typo for "hello"
             assertThat(json).isNotNull()
         }
 
@@ -223,7 +223,7 @@ class PerformanceTest {
 
         val medianMs = measureOperation("e2e_rapidTyping") {
             for (query in queries) {
-                DictCore.search(query, 10)
+                DictCore.search(query, 10, 0)
             }
         }
 
@@ -263,7 +263,7 @@ class PerformanceTest {
 
         val totalMs = measureTimeMillis {
             repeat(100) { i ->
-                DictCore.search(queries[i % queries.size], 20)
+                DictCore.search(queries[i % queries.size], 20, 0)
             }
         }
 

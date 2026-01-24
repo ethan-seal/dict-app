@@ -33,7 +33,11 @@ sealed class SearchState {
     data object Loading : SearchState()
 
     /** Search completed successfully */
-    data class Success(val results: List<SearchResult>) : SearchState()
+    data class Success(
+        val results: List<SearchResult>,
+        val isLoadingMore: Boolean = false,
+        val canLoadMore: Boolean = true
+    ) : SearchState()
 
     /** Search failed */
     data class Error(val message: String) : SearchState()
@@ -114,6 +118,10 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedLanguage = MutableStateFlow<LanguageInfo?>(null)
     val selectedLanguage: StateFlow<LanguageInfo?> = _selectedLanguage.asStateFlow()
 
+    // Pagination tracking
+    private var currentOffset = 0
+    private var currentSearchQuery = ""
+
     // Search state
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -181,6 +189,10 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
     
     companion object {
         private const val TAG = "DictViewModel"
+        /** Number of results to fetch per page */
+        const val PAGE_SIZE = 15
+        /** Load more when within this many items of the end */
+        const val LOAD_MORE_THRESHOLD = 5
     }
 
     /**
@@ -239,15 +251,59 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Perform search on background thread.
+     * Resets pagination and fetches the first page.
      */
     private fun performSearch(query: String) {
         viewModelScope.launch {
             try {
-                val results = DictCore.searchParsed(query, 50)
-                _searchState.value = SearchState.Success(results)
+                currentSearchQuery = query
+                currentOffset = 0
+                val results = withContext(Dispatchers.IO) {
+                    DictCore.searchParsed(query, PAGE_SIZE, 0)
+                }
+                val canLoadMore = results.size >= PAGE_SIZE
+                currentOffset = results.size
+                _searchState.value = SearchState.Success(
+                    results = results,
+                    canLoadMore = canLoadMore
+                )
             } catch (e: Exception) {
                 _searchState.value = SearchState.Error(
                     e.message ?: "Search failed"
+                )
+            }
+        }
+    }
+
+    /**
+     * Load the next page of search results.
+     * Appends to the existing result list.
+     */
+    fun loadMoreResults() {
+        val currentState = _searchState.value
+        if (currentState !is SearchState.Success) return
+        if (currentState.isLoadingMore || !currentState.canLoadMore) return
+
+        _searchState.value = currentState.copy(isLoadingMore = true)
+
+        viewModelScope.launch {
+            try {
+                val moreResults = withContext(Dispatchers.IO) {
+                    DictCore.searchParsed(currentSearchQuery, PAGE_SIZE, currentOffset)
+                }
+                val canLoadMore = moreResults.size >= PAGE_SIZE
+                currentOffset += moreResults.size
+                val combined = currentState.results + moreResults
+                _searchState.value = SearchState.Success(
+                    results = combined,
+                    isLoadingMore = false,
+                    canLoadMore = canLoadMore
+                )
+            } catch (e: Exception) {
+                // On error loading more, keep existing results but stop loading
+                _searchState.value = currentState.copy(
+                    isLoadingMore = false,
+                    canLoadMore = false
                 )
             }
         }

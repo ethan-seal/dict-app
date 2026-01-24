@@ -12,7 +12,7 @@ use std::os::raw::{c_char, c_int, c_longlong};
 
 use std::sync::Mutex;
 
-use crate::{get_definition, init, search, DictHandle};
+use crate::{get_definition, init, search_with_offset, DictHandle};
 
 /// Global handle storage for FFI
 ///
@@ -88,6 +88,7 @@ pub unsafe extern "C" fn dict_init(db_path: *const c_char) -> c_int {
 pub unsafe extern "C" fn dict_search(
     query: *const c_char,
     limit: c_int,
+    offset: c_int,
     out_json: *mut *mut c_char,
 ) -> c_int {
     if query.is_null() || out_json.is_null() {
@@ -105,7 +106,7 @@ pub unsafe extern "C" fn dict_search(
         None => return FfiError::NotInitialized as c_int,
     };
 
-    let results = search(handle, query_str, limit as u32);
+    let results = search_with_offset(handle, query_str, limit as u32, offset as u32);
 
     // Serialize results to JSON
     let json = match serde_json::to_string(&results) {
@@ -249,13 +250,14 @@ mod android {
 
     /// JNI: Search for words
     ///
-    /// Kotlin signature: external fun search(query: String, limit: Int): String
+    /// Kotlin signature: external fun search(query: String, limit: Int, offset: Int): String
     #[no_mangle]
     pub extern "system" fn Java_org_example_dictapp_DictCore_search(
         mut env: JNIEnv,
         _class: JClass,
         query: JString,
         limit: jint,
+        offset: jint,
     ) -> jstring {
         let query_str: String = match env.get_string(&query) {
             Ok(s) => s.into(),
@@ -268,7 +270,7 @@ mod android {
             None => return ptr::null_mut(),
         };
 
-        let results = search(handle, &query_str, limit as u32);
+        let results = search_with_offset(handle, &query_str, limit as u32, offset as u32);
 
         let json = match serde_json::to_string(&results) {
             Ok(j) => j,
@@ -374,7 +376,7 @@ mod tests {
         unsafe {
             assert_eq!(dict_init(ptr::null()), FfiError::NullPointer as c_int);
             assert_eq!(
-                dict_search(ptr::null(), 10, ptr::null_mut()),
+                dict_search(ptr::null(), 10, 0, ptr::null_mut()),
                 FfiError::NullPointer as c_int
             );
         }
@@ -389,7 +391,7 @@ mod tests {
             // Ensure handle is cleared
             dict_close();
 
-            let result = dict_search(query.as_ptr(), 10, &mut out);
+            let result = dict_search(query.as_ptr(), 10, 0, &mut out);
             assert_eq!(result, FfiError::NotInitialized as c_int);
         }
     }

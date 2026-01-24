@@ -53,7 +53,7 @@ class JsonParsingBenchmark {
         }
 
         // Capture JSON strings for parsing benchmarks
-        searchResultJson = DictCore.search("hel", 50) ?: "[]"
+        searchResultJson = DictCore.search("hel", 50, 0) ?: "[]"
 
         val results = DictCore.searchParsed("hello", 1)
         wordId = results.firstOrNull()?.id ?: 1
@@ -141,7 +141,7 @@ class JsonParsingBenchmark {
     @Test
     fun overhead_searchJniOnly() {
         benchmarkRule.measureRepeated {
-            val json = DictCore.search("hel", 50)
+            val json = DictCore.search("hel", 50, 0)
             check(json != null)
         }
     }
