@@ -13,14 +13,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.dictapp.DictCore
 import org.example.dictapp.FullDefinition
+import org.example.dictapp.Pronunciation
 import org.example.dictapp.SearchResult
 import org.example.dictapp.download.DownloadManager
 import org.example.dictapp.download.DownloadProgress
 import org.example.dictapp.download.LanguageInfo
+import org.example.dictapp.settings.EnglishVariant
+import org.example.dictapp.settings.SettingsRepository
 
 /**
  * State for search operations.
@@ -95,6 +99,9 @@ sealed class DownloadState {
  */
 @OptIn(FlowPreview::class)
 class DictViewModel(application: Application) : AndroidViewModel(application) {
+
+    // Settings repository for user preferences
+    private val settingsRepository = SettingsRepository(application)
 
     // Download manager for handling database downloads
     private val downloadManager = DownloadManager(application)
@@ -324,7 +331,10 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (definition != null) {
-                    _definitionState.value = DefinitionState.Success(definition)
+                    val variant = settingsRepository.englishVariant.first()
+                    val sorted = sortPronunciations(definition.pronunciations, variant)
+                    val result = definition.copy(pronunciations = sorted)
+                    _definitionState.value = DefinitionState.Success(result)
                 } else {
                     _definitionState.value = DefinitionState.Error("Definition not found")
                 }
@@ -334,6 +344,38 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    /**
+     * Sort pronunciations so the preferred English variant appears first.
+     *
+     * Matching is case-insensitive on the accent field:
+     * - US: matches accents containing "US" or "GA" (General American)
+     * - UK: matches accents containing "UK" or "RP" (Received Pronunciation)
+     * - AU: matches accents containing "AU"
+     * - NONE: returns original order
+     *
+     * Non-matching pronunciations retain their relative order (stable sort).
+     */
+    internal fun sortPronunciations(
+        pronunciations: List<Pronunciation>,
+        variant: EnglishVariant
+    ): List<Pronunciation> {
+        if (variant == EnglishVariant.NONE) return pronunciations
+
+        val accentPatterns = when (variant) {
+            EnglishVariant.US -> listOf("US", "GA")
+            EnglishVariant.UK -> listOf("UK", "RP")
+            EnglishVariant.AU -> listOf("AU")
+            EnglishVariant.NONE -> return pronunciations
+        }
+
+        return pronunciations.sortedWith(
+            compareByDescending { pronunciation ->
+                val accent = pronunciation.accent?.uppercase() ?: ""
+                accentPatterns.any { pattern -> accent.contains(pattern) }
+            }
+        )
     }
 
     /**
