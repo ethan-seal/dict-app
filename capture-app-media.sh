@@ -93,7 +93,8 @@ ADB="$SDK_ROOT/platform-tools/adb"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTPUT_DIR="$SCRIPT_DIR/captures/$TIMESTAMP"
 SCREENSHOT_DIR="$OUTPUT_DIR/screenshots"
-mkdir -p "$SCREENSHOT_DIR"
+SCREENSHOT_DIR_DARK="$OUTPUT_DIR/screenshots-dark"
+mkdir -p "$SCREENSHOT_DIR" "$SCREENSHOT_DIR_DARK"
 
 # Device paths
 DEVICE_VIDEO="/sdcard/app-capture.mp4"
@@ -190,94 +191,118 @@ sleep 2
 # Clean up any previous capture files on device
 $ADB_EMU shell "rm -f $DEVICE_VIDEO" 2>/dev/null || true
 $ADB_EMU shell "rm -rf $DEVICE_SCREENSHOT_DIR" 2>/dev/null || true
-$ADB_EMU shell "mkdir -p $DEVICE_SCREENSHOT_DIR" 2>/dev/null || true
 
 echo ""
+
+MARKER_PATTERN="CAPTURE_MARKER"
+
+# Function: run a capture pass (test + screenshot collection)
+# Args: $1 = mode label (light/dark), $2 = local output directory for screenshots
+run_capture_pass() {
+    local mode="$1"
+    local local_screenshot_dir="$2"
+
+    # Clean device screenshot dir
+    $ADB_EMU shell "rm -rf $DEVICE_SCREENSHOT_DIR" 2>/dev/null || true
+    $ADB_EMU shell "mkdir -p $DEVICE_SCREENSHOT_DIR" 2>/dev/null || true
+
+    # Start logcat monitoring for screenshot markers
+    echo -e "${BLUE}Starting screenshot capture monitor ($mode mode)...${NC}"
+    local screenshot_count=0
+
+    (
+        $ADB_EMU logcat -c
+        $ADB_EMU logcat -s "AppCapture:I" | while read -r line; do
+            if echo "$line" | grep -q "$MARKER_PATTERN"; then
+                MARKER_NAME=$(echo "$line" | sed -n "s/.*${MARKER_PATTERN}:\([^ ]*\).*/\1/p")
+                if [ -n "$MARKER_NAME" ] && [ "$MARKER_NAME" != "DONE" ] && [ "$MARKER_NAME" != "outlier_DONE" ]; then
+                    screenshot_count=$((screenshot_count + 1))
+                    FILENAME="${MARKER_NAME}.png"
+                    $ADB_EMU shell "screencap -p $DEVICE_SCREENSHOT_DIR/$FILENAME"
+                    echo -e "  ${GREEN}✓${NC} Captured ($mode): $FILENAME"
+                fi
+                if [ "$MARKER_NAME" = "outlier_DONE" ]; then
+                    echo "CAPTURE_COMPLETE" >> "/tmp/capture_done_${mode}_$$"
+                    break
+                fi
+            fi
+        done
+    ) &
+    local logcat_pid=$!
+
+    # Run the capture test
+    echo ""
+    echo -e "${BLUE}Running capture test flow ($mode mode)...${NC}"
+    echo ""
+
+    cd android
+    local test_exit=0
+    ANDROID_SERIAL="$EMU_SERIAL" ./gradlew connectedAndroidTest \
+        -Pandroid.testInstrumentationRunnerArguments.class=org.example.dictapp.AppCaptureTest \
+        --info 2>&1 | grep -E "> Task|BUILD|PASSED|FAILED|captureAppFlow|SEVERE" || test_exit=$?
+    cd ..
+
+    # Wait for final screenshot
+    sleep 2
+
+    # Stop logcat monitor
+    kill $logcat_pid 2>/dev/null || true
+    rm -f "/tmp/capture_done_${mode}_$$"
+
+    # Pull screenshots
+    echo ""
+    echo -e "${BLUE}Retrieving $mode mode screenshots...${NC}"
+    local pulled=0
+    for file in $($ADB_EMU shell "ls $DEVICE_SCREENSHOT_DIR/*.png 2>/dev/null" | tr -d '\r'); do
+        filename=$(basename "$file")
+        $ADB_EMU pull "$file" "$local_screenshot_dir/$filename" 2>/dev/null && pulled=$((pulled + 1))
+    done
+
+    if [ $pulled -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} $pulled screenshots saved to $local_screenshot_dir/"
+    else
+        echo -e "  ${YELLOW}!${NC} No screenshots captured ($mode mode)"
+    fi
+}
 
 # Start video recording in background (if enabled)
 VIDEO_PID=""
 if [ "$CAPTURE_VIDEO" = true ]; then
     echo -e "${BLUE}Starting video recording...${NC}"
-    # screenrecord has 180s limit, which should be plenty
     $ADB_EMU shell "screenrecord --bit-rate 8000000 $DEVICE_VIDEO" &
     VIDEO_PID=$!
-    sleep 1  # Let recording stabilize
+    sleep 1
 fi
 
-# Start logcat monitoring for screenshot markers
-echo -e "${BLUE}Starting screenshot capture monitor...${NC}"
-MARKER_PATTERN="CAPTURE_MARKER"
-SCREENSHOT_COUNT=0
-
-# Monitor logcat in background and capture screenshots when markers appear
-(
-    $ADB_EMU logcat -c  # Clear logcat buffer
-    $ADB_EMU logcat -s "AppCapture:I" | while read -r line; do
-        if echo "$line" | grep -q "$MARKER_PATTERN"; then
-            MARKER_NAME=$(echo "$line" | sed -n "s/.*${MARKER_PATTERN}:\([^ ]*\).*/\1/p")
-            if [ -n "$MARKER_NAME" ] && [ "$MARKER_NAME" != "DONE" ]; then
-                SCREENSHOT_COUNT=$((SCREENSHOT_COUNT + 1))
-                FILENAME="${MARKER_NAME}.png"
-                $ADB_EMU shell "screencap -p $DEVICE_SCREENSHOT_DIR/$FILENAME"
-                echo -e "  ${GREEN}✓${NC} Captured: $FILENAME"
-            fi
-            if [ "$MARKER_NAME" = "DONE" ]; then
-                echo "CAPTURE_COMPLETE" >> /tmp/capture_done_$$
-                break
-            fi
-        fi
-    done
-) &
-LOGCAT_PID=$!
-
-# Run the capture test
+# === Pass 1: Light mode ===
 echo ""
-echo -e "${BLUE}Running capture test flow...${NC}"
+echo -e "${BLUE}=== Light Mode Capture ===${NC}"
+$ADB_EMU shell "cmd uimode night no" 2>/dev/null || true
+sleep 1
+run_capture_pass "light" "$SCREENSHOT_DIR"
+
+# === Pass 2: Dark mode ===
 echo ""
+echo -e "${BLUE}=== Dark Mode Capture ===${NC}"
+$ADB_EMU shell "cmd uimode night yes" 2>/dev/null || true
+sleep 2  # Extra settle time for theme change
+run_capture_pass "dark" "$SCREENSHOT_DIR_DARK"
 
-cd android
-TEST_EXIT=0
-# Run only on the target emulator (not physical devices)
-ANDROID_SERIAL="$EMU_SERIAL" ./gradlew connectedAndroidTest \
-    -Pandroid.testInstrumentationRunnerArguments.class=org.example.dictapp.AppCaptureTest \
-    --info 2>&1 | grep -E "> Task|BUILD|PASSED|FAILED|captureAppFlow|SEVERE" || TEST_EXIT=$?
-cd ..
-
-# Wait a moment for final screenshot
-sleep 2
-
-# Stop logcat monitor
-kill $LOGCAT_PID 2>/dev/null || true
-rm -f /tmp/capture_done_$$
+# Restore light mode
+$ADB_EMU shell "cmd uimode night no" 2>/dev/null || true
 
 # Stop video recording
 if [ -n "$VIDEO_PID" ]; then
     echo ""
     echo -e "${BLUE}Stopping video recording...${NC}"
-    # Send Ctrl+C to screenrecord
     $ADB_EMU shell "pkill -INT screenrecord" 2>/dev/null || true
     sleep 2
 fi
 
-# Pull captured files
-echo ""
-echo -e "${BLUE}Retrieving captured media...${NC}"
-
-# Pull screenshots
-PULLED_SCREENSHOTS=0
-for file in $($ADB_EMU shell "ls $DEVICE_SCREENSHOT_DIR/*.png 2>/dev/null" | tr -d '\r'); do
-    filename=$(basename "$file")
-    $ADB_EMU pull "$file" "$SCREENSHOT_DIR/$filename" 2>/dev/null && PULLED_SCREENSHOTS=$((PULLED_SCREENSHOTS + 1))
-done
-
-if [ $PULLED_SCREENSHOTS -gt 0 ]; then
-    echo -e "  ${GREEN}✓${NC} $PULLED_SCREENSHOTS screenshots saved to $SCREENSHOT_DIR/"
-else
-    echo -e "  ${YELLOW}!${NC} No screenshots captured"
-fi
-
 # Pull video
 if [ "$CAPTURE_VIDEO" = true ]; then
+    echo ""
+    echo -e "${BLUE}Retrieving video...${NC}"
     if $ADB_EMU shell "test -f $DEVICE_VIDEO" 2>/dev/null; then
         $ADB_EMU pull "$DEVICE_VIDEO" "$OUTPUT_DIR/app-flow.mp4" 2>/dev/null
         echo -e "  ${GREEN}✓${NC} Video saved to $OUTPUT_DIR/app-flow.mp4"
@@ -299,8 +324,13 @@ echo ""
 ls -la "$OUTPUT_DIR" 2>/dev/null || true
 echo ""
 if [ -d "$SCREENSHOT_DIR" ]; then
-    echo "Screenshots:"
+    echo "Screenshots (light):"
     ls -la "$SCREENSHOT_DIR" 2>/dev/null | tail -n +2 || true
+fi
+echo ""
+if [ -d "$SCREENSHOT_DIR_DARK" ]; then
+    echo "Screenshots (dark):"
+    ls -la "$SCREENSHOT_DIR_DARK" 2>/dev/null | tail -n +2 || true
 fi
 
 # Generate HTML viewer
@@ -370,6 +400,31 @@ generate_html_viewer() {
     
     local display_ts="$month_name $day_num, $year at $hour_num:$min $ampm"
     
+    # Check if dark screenshots exist
+    local has_dark="false"
+    if [ -d "$SCREENSHOT_DIR_DARK" ] && ls "$SCREENSHOT_DIR_DARK"/*.png &>/dev/null; then
+        has_dark="true"
+    fi
+
+    # Determine which sections have content
+    local has_search=false
+    local has_definition=false
+    local has_edge_long=false
+    local has_edge_many=false
+    local has_edge_missing=false
+    if [ -d "$SCREENSHOT_DIR" ]; then
+        for img in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null); do
+            local fname=$(basename "$img" .png)
+            case "$fname" in
+                01_*|02_*|04_*|05_*|07_*) has_search=true ;;
+                03_*|03b_*|06_*|06b_*|06c_*) has_definition=true ;;
+                outlier_01*|outlier_03*|outlier_04*) has_edge_long=true ;;
+                outlier_02*) has_edge_many=true ;;
+                outlier_05*|outlier_06*) has_edge_missing=true ;;
+            esac
+        done
+    fi
+
     # Start HTML
     cat > "$html_file" << HTMLHEAD
 <!DOCTYPE html>
@@ -385,33 +440,135 @@ generate_html_viewer() {
             background: #1a1a2e;
             color: #eee;
             min-height: 100vh;
-            padding: 2rem;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
-        header {
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 220px;
+            height: 100vh;
+            background: #151528;
+            border-right: 1px solid #2a2a4a;
+            padding: 1.5rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        .sidebar-header {
             text-align: center;
-            margin-bottom: 2rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #2a2a4a;
         }
-        h1 { font-size: 1.5rem; font-weight: 500; margin-bottom: 0.5rem; }
-        .timestamp { color: #888; font-size: 0.9rem; }
-        .commit { color: #666; font-size: 0.8rem; font-family: monospace; margin-top: 0.25rem; }
-        .commit a { color: #6a9fb5; text-decoration: none; }
-        .commit a:hover { text-decoration: underline; }
-        .video-section { margin-bottom: 2rem; text-align: center; }
-        .video-section h2, .screenshots-section h2 {
+        .sidebar-header h1 {
             font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .sidebar-header .timestamp {
+            color: #888;
+            font-size: 0.75rem;
+        }
+        .sidebar-header .commit {
+            color: #666;
+            font-size: 0.7rem;
+            font-family: monospace;
+            margin-top: 0.2rem;
+        }
+        .sidebar-header .commit a {
+            color: #6a9fb5;
+            text-decoration: none;
+        }
+        .sidebar-header .commit a:hover { text-decoration: underline; }
+
+        /* Theme toggle in sidebar */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .theme-toggle .toggle-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .theme-toggle .toggle-label.active { color: #eee; }
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            background: #333;
+            border-radius: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.dark { background: #555; }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch.dark::after { transform: translateX(18px); }
+
+        /* Sidebar navigation */
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .sidebar-nav a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .sidebar-nav a:hover {
+            background: #252542;
+            color: #eee;
+        }
+        .sidebar-nav a.active {
+            background: #2a2a5a;
+            color: #fff;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: 220px;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        /* Sections */
+        .capture-section {
+            margin-bottom: 3rem;
+            scroll-margin-top: 1.5rem;
+        }
+        .capture-section h2 {
+            font-size: 1.1rem;
             font-weight: 500;
             margin-bottom: 1rem;
-            color: #aaa;
+            color: #ccc;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2a2a4a;
         }
-        video {
-            max-width: 400px;
-            width: 100%;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
+
+        /* Gallery grid */
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -429,6 +586,9 @@ generate_html_viewer() {
             box-shadow: 0 8px 25px rgba(0,0,0,0.4);
         }
         .screenshot-card img { width: 100%; height: auto; display: block; }
+        .screenshot-card img.img-dark { display: none; }
+        body.mode-dark .screenshot-card img.img-light { display: none; }
+        body.mode-dark .screenshot-card img.img-dark { display: block; }
         .screenshot-card .label {
             padding: 0.75rem;
             font-size: 0.8rem;
@@ -436,6 +596,25 @@ generate_html_viewer() {
             text-align: center;
             background: #1e1e36;
         }
+
+        /* Video section */
+        .video-section { text-align: center; }
+        .video-section h2 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: #ccc;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        video {
+            max-width: 400px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        /* Lightbox */
         .lightbox {
             display: none;
             position: fixed;
@@ -483,26 +662,213 @@ generate_html_viewer() {
             color: #888;
             font-size: 0.9rem;
         }
+
         .no-content { text-align: center; padding: 3rem; color: #666; }
-        @media (max-width: 600px) {
-            body { padding: 1rem; }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                width: 180px;
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 1rem; }
             .gallery { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+            .menu-toggle {
+                display: flex !important;
+            }
+        }
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 101;
+            background: #252542;
+            border: 1px solid #2a2a4a;
+            color: #eee;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Dict App - UI Capture</h1>
+    <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>Dict App</h1>
             <div class="timestamp">$display_ts</div>
             $commit_html
-        </header>
+        </div>
 HTMLHEAD
 
-    # Add video section if video exists
+    # Add theme toggle if dark screenshots exist
+    if [ "$has_dark" = "true" ]; then
+        cat >> "$html_file" << 'HTMLTOGGLE'
+        <div class="theme-toggle">
+            <span class="toggle-label active" id="label-light">Light</span>
+            <div class="toggle-switch" id="theme-switch" onclick="toggleTheme()"></div>
+            <span class="toggle-label" id="label-dark">Dark</span>
+        </div>
+HTMLTOGGLE
+    fi
+
+    # Add sidebar navigation
+    echo '        <nav class="sidebar-nav">' >> "$html_file"
+    [ "$has_search" = true ] && echo '            <a href="#search">Search</a>' >> "$html_file"
+    [ "$has_definition" = true ] && echo '            <a href="#definition-view">Definition View</a>' >> "$html_file"
+    [ "$has_edge_long" = true ] && echo '            <a href="#edge-long-content">Edge: Long Content</a>' >> "$html_file"
+    [ "$has_edge_many" = true ] && echo '            <a href="#edge-many-items">Edge: Many Items</a>' >> "$html_file"
+    [ "$has_edge_missing" = true ] && echo '            <a href="#edge-missing-sections">Edge: Missing Sections</a>' >> "$html_file"
+    [ "$has_video" = true ] && echo '            <a href="#video">Video</a>' >> "$html_file"
+    cat >> "$html_file" << 'HTMLNAVEND'
+        </nav>
+    </aside>
+    <main class="main-content">
+HTMLNAVEND
+
+    # Helper: emit a screenshot card
+    # Usage: emit_card <filename> <label> <index>
+    emit_card() {
+        local filename="$1"
+        local label="$2"
+        local idx="$3"
+        local dark_img=""
+        if [ -f "$SCREENSHOT_DIR_DARK/$filename" ]; then
+            dark_img="<img class=\"img-dark\" src=\"screenshots-dark/$filename\" alt=\"$label\">"
+        fi
+        cat >> "$html_file" << HTMLCARD
+                <div class="screenshot-card" onclick="openLightbox($idx)">
+                    <img class="img-light" src="screenshots/$filename" alt="$label">
+                    $dark_img
+                    <div class="label">$label</div>
+                </div>
+HTMLCARD
+    }
+
+    # Categorize screenshots into sections
+    local index=0
+    local search_cards=""
+    local definition_cards=""
+    local edge_long_cards=""
+    local edge_many_cards=""
+    local edge_missing_cards=""
+    local found_screenshots=false
+
+    # Build arrays of (filename, label, index) per section
+    declare -a search_files=() definition_files=() edge_long_files=() edge_many_files=() edge_missing_files=()
+
+    if [ -d "$SCREENSHOT_DIR" ]; then
+        for img in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null | sort); do
+            found_screenshots=true
+            local filename=$(basename "$img")
+            local fname=$(basename "$img" .png)
+            local label=$(echo "$fname" | sed 's/^outlier_[0-9]*[a-z]*_//;s/^[0-9]*[a-z]*_//;s/_/ /g')
+
+            case "$fname" in
+                01_*|02_*|04_*|05_*|07_*)
+                    search_files+=("$filename|$label|$index") ;;
+                03_*|03b_*|06_*|06b_*|06c_*)
+                    definition_files+=("$filename|$label|$index") ;;
+                outlier_01*|outlier_03*|outlier_04*)
+                    edge_long_files+=("$filename|$label|$index") ;;
+                outlier_02*)
+                    edge_many_files+=("$filename|$label|$index") ;;
+                outlier_05*|outlier_06*)
+                    edge_missing_files+=("$filename|$label|$index") ;;
+                *)
+                    # Fallback: put uncategorized in search section
+                    search_files+=("$filename|$label|$index") ;;
+            esac
+            index=$((index + 1))
+        done
+    fi
+
+    # Emit each section
+    if [ ${#search_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="search">
+            <h2>Search</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${search_files[@]}"; do
+            IFS='|' read -r f l i <<< "$entry"
+            emit_card "$f" "$l" "$i"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#definition_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="definition-view">
+            <h2>Definition View</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${definition_files[@]}"; do
+            IFS='|' read -r f l i <<< "$entry"
+            emit_card "$f" "$l" "$i"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#edge_long_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-long-content">
+            <h2>Edge Cases: Long Content</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_long_files[@]}"; do
+            IFS='|' read -r f l i <<< "$entry"
+            emit_card "$f" "$l" "$i"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#edge_many_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-many-items">
+            <h2>Edge Cases: Many Items</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_many_files[@]}"; do
+            IFS='|' read -r f l i <<< "$entry"
+            emit_card "$f" "$l" "$i"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#edge_missing_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-missing-sections">
+            <h2>Edge Cases: Missing Sections</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_missing_files[@]}"; do
+            IFS='|' read -r f l i <<< "$entry"
+            emit_card "$f" "$l" "$i"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ "$found_screenshots" = false ]; then
+        echo '        <div class="no-content">No screenshots captured</div>' >> "$html_file"
+    fi
+
+    # Add video section at the bottom if video exists
     if [ "$has_video" = "true" ]; then
         cat >> "$html_file" << 'HTMLVIDEO'
-        <section class="video-section">
+        <section class="capture-section video-section" id="video">
             <h2>App Flow Video</h2>
             <video controls>
                 <source src="app-flow.mp4" type="video/mp4">
@@ -512,40 +878,9 @@ HTMLHEAD
 HTMLVIDEO
     fi
 
-    # Start screenshots section
-    cat >> "$html_file" << 'HTMLGALLERY'
-        <section class="screenshots-section">
-            <h2>Screenshots</h2>
-            <div class="gallery" id="gallery">
-HTMLGALLERY
-
-    # Add screenshot cards
-    local index=0
-    local found_screenshots=false
-    if [ -d "$SCREENSHOT_DIR" ]; then
-        for img in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null | sort); do
-            found_screenshots=true
-            local filename=$(basename "$img")
-            local label=$(basename "$img" .png | sed 's/^[0-9]*_//;s/_/ /g')
-            cat >> "$html_file" << HTMLCARD
-                <div class="screenshot-card" onclick="openLightbox($index)">
-                    <img src="screenshots/$filename" alt="$label">
-                    <div class="label">$label</div>
-                </div>
-HTMLCARD
-            index=$((index + 1))
-        done
-    fi
-    
-    if [ "$found_screenshots" = false ]; then
-        echo '                <div class="no-content">No screenshots captured</div>' >> "$html_file"
-    fi
-
-    # Close gallery and add lightbox + script
+    # Close main content and add lightbox + script
     cat >> "$html_file" << 'HTMLEND'
-            </div>
-        </section>
-    </div>
+    </main>
     
     <div class="lightbox" id="lightbox">
         <span class="close" onclick="closeLightbox()">&times;</span>
@@ -556,8 +891,26 @@ HTMLCARD
     </div>
     
     <script>
-        const images = Array.from(document.querySelectorAll('.screenshot-card img'));
+        let darkMode = false;
         let currentIndex = 0;
+
+        function getVisibleImages() {
+            const cls = darkMode ? 'img-dark' : 'img-light';
+            return Array.from(document.querySelectorAll('.screenshot-card img.' + cls));
+        }
+
+        function toggleTheme() {
+            darkMode = !darkMode;
+            document.body.classList.toggle('mode-dark', darkMode);
+            const sw = document.getElementById('theme-switch');
+            sw.classList.toggle('dark', darkMode);
+            document.getElementById('label-light').classList.toggle('active', !darkMode);
+            document.getElementById('label-dark').classList.toggle('active', darkMode);
+            // Update lightbox if open
+            if (document.getElementById('lightbox').classList.contains('active')) {
+                updateLightbox();
+            }
+        }
         
         function openLightbox(index) {
             currentIndex = index;
@@ -572,15 +925,38 @@ HTMLCARD
         }
         
         function navigate(dir) {
+            const images = getVisibleImages();
             currentIndex = (currentIndex + dir + images.length) % images.length;
             updateLightbox();
         }
         
         function updateLightbox() {
-            const img = images[currentIndex];
-            document.getElementById('lightbox-img').src = img.src;
-            document.getElementById('lightbox-caption').textContent = img.alt;
+            const images = getVisibleImages();
+            if (images[currentIndex]) {
+                document.getElementById('lightbox-img').src = images[currentIndex].src;
+                document.getElementById('lightbox-caption').textContent = images[currentIndex].alt;
+            }
         }
+
+        // Highlight active sidebar link on scroll
+        const sections = document.querySelectorAll('.capture-section');
+        const navLinks = document.querySelectorAll('.sidebar-nav a');
+        
+        function updateActiveNav() {
+            let current = '';
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 100) {
+                    current = section.id;
+                }
+            });
+            navLinks.forEach(link => {
+                link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+            });
+        }
+        
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav();
         
         document.addEventListener('keydown', (e) => {
             if (!document.getElementById('lightbox').classList.contains('active')) return;
@@ -591,6 +967,13 @@ HTMLCARD
         
         document.getElementById('lightbox').addEventListener('click', (e) => {
             if (e.target.id === 'lightbox') closeLightbox();
+        });
+
+        // Close mobile sidebar when a nav link is clicked
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', () => {
+                document.querySelector('.sidebar').classList.remove('open');
+            });
         });
     </script>
 </body>
