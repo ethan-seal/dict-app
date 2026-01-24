@@ -230,9 +230,8 @@ private fun SearchResultCard(
             .clickable(onClick = onClick)
             .testTag("${TestTags.SEARCH_RESULT_CARD}_${result.id}"),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier

@@ -276,28 +276,29 @@ private fun ButtonsSection() {
 @Composable
 private fun CardsSection() {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Elevated Card (2.dp)", style = MaterialTheme.typography.labelMedium)
+        Text("Tonal Card (surfaceContainerLow)", style = MaterialTheme.typography.labelMedium)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Text(
+                "Card with surfaceContainerLow background",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        Text("Tonal Card (surfaceVariant)", style = MaterialTheme.typography.labelMedium)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
             Text(
                 "Card with surfaceVariant background",
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        Text("Elevated Card (1.dp)", style = MaterialTheme.typography.labelMedium)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Text(
-                "Card with default surface background",
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium
             )

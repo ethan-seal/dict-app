@@ -40,6 +40,7 @@ private val LightOnSurface = Color(0xFF1C1B1F)
 private val LightSurfaceVariant = Color(0xFFEFEBE9)
 private val LightOnSurfaceVariant = Color(0xFF3D3843)
 private val LightOutline = Color(0xFF79747E)
+private val LightSurfaceContainerLow = Color(0xFFF7F2EF)
 
 private val DarkPrimary = Color(0xFFBCAAA4)          // Light brown
 private val DarkOnPrimary = Color(0xFF3E2723)
@@ -64,6 +65,7 @@ private val DarkOnSurface = Color(0xFFE6E1E5)
 private val DarkSurfaceVariant = Color(0xFF3E2723)
 private val DarkOnSurfaceVariant = Color(0xFFCAC4D0)
 private val DarkOutline = Color(0xFF938F99)
+private val DarkSurfaceContainerLow = Color(0xFF252329)
 
 private val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
@@ -88,7 +90,8 @@ private val LightColorScheme = lightColorScheme(
     onSurface = LightOnSurface,
     surfaceVariant = LightSurfaceVariant,
     onSurfaceVariant = LightOnSurfaceVariant,
-    outline = LightOutline
+    outline = LightOutline,
+    surfaceContainerLow = LightSurfaceContainerLow
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -114,7 +117,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = DarkOnSurface,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkOutline
+    outline = DarkOutline,
+    surfaceContainerLow = DarkSurfaceContainerLow
 )
 
 /**
