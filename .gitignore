@@ -57,7 +57,6 @@ android/app/src/main/jniLibs/**/*.so
 data/raw/
 data/processed/
 *.db
-!**/androidTest/assets/test-dict.db
 *.db-journal
 *.db-wal
 *.db-shm
