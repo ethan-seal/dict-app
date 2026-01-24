@@ -11,14 +11,17 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.example.dictapp.ui.TestTags
 import org.junit.After
 import org.junit.Before
+import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.runners.MethodSorters
 import java.io.File
 
 /**
@@ -33,6 +36,7 @@ import java.io.File
  * trigger screenshots at key moments.
  */
 @RunWith(AndroidJUnit4::class)
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class AppCaptureTest {
 
     companion object {
@@ -210,15 +214,7 @@ class AppCaptureTest {
         }
 
         // === Scene 7: Show no results case ===
-        composeTestRule
-            .onNodeWithTag(TestTags.BACK_BUTTON)
-            .performClick()
-        
-        composeTestRule.waitUntil(timeoutMillis = 15000) {
-            composeTestRule
-                .onAllNodesWithTag(TestTags.SEARCH_RESULTS_LIST)
-                .fetchSemanticsNodes().isNotEmpty()
-        }
+        navigateBack()
         
         composeTestRule
             .onNodeWithTag(TestTags.SEARCH_INPUT)
@@ -284,7 +280,8 @@ class AppCaptureTest {
                 .performScrollToNode(hasTestTag(testTag))
             Thread.sleep(TRANSITION_PAUSE)
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            Log.w(TAG, "scrollToSection($testTag) failed: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }
