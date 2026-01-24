@@ -145,6 +145,7 @@ fun DictApp(
             SearchScreen(
                 viewModel = viewModel,
                 onWordClick = { wordId ->
+                    viewModel.loadDefinition(wordId)
                     navController.navigate(Routes.definition(wordId))
                 },
                 onSettingsClick = {

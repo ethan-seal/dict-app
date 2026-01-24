@@ -57,9 +57,11 @@ fun DefinitionScreen(
 ) {
     val definitionState by viewModel.definitionState.collectAsState()
 
-    // Load definition when screen opens
+    // Fallback: load definition if not already pre-loaded by click handler
     LaunchedEffect(wordId) {
-        viewModel.loadDefinition(wordId)
+        if (viewModel.definitionState.value is DefinitionState.Idle) {
+            viewModel.loadDefinition(wordId)
+        }
     }
 
     Scaffold(
