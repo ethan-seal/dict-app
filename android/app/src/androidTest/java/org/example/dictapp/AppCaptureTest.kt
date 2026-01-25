@@ -42,10 +42,10 @@ class AppCaptureTest {
     companion object {
         private const val TAG = "AppCapture"
         
-        // Pause durations (ms) - longer pauses for video readability
-        private const val SCENE_PAUSE = 1500L      // Pause to show a scene
-        private const val TYPING_DELAY = 100L      // Delay between keystrokes
-        private const val TRANSITION_PAUSE = 800L  // Pause after navigation
+        // Pause durations (ms) - minimal pauses since waitUntil ensures UI readiness
+        private const val SCENE_PAUSE = 400L       // Brief pause for screenshot capture
+        private const val TYPING_DELAY = 50L       // Fast but still visible typing
+        private const val TRANSITION_PAUSE = 300L  // UI ready via waitUntil anyway
         
         // Log marker prefix - capture script watches for these
         const val MARKER_PREFIX = "CAPTURE_MARKER"
