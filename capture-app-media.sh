@@ -7,6 +7,7 @@ set -e
 #   ./capture-app-media.sh              # Capture with default settings
 #   ./capture-app-media.sh --gui        # Show emulator window while capturing
 #   ./capture-app-media.sh --no-video   # Screenshots only (faster)
+#   ./capture-app-media.sh --skip-build # Skip APK build (use existing)
 #   ./capture-app-media.sh --avd <name> # Use specific AVD
 #
 # Output: ./captures/<timestamp>/
@@ -27,6 +28,7 @@ NC='\033[0m'
 AVD_NAME="Medium_Phone_API_35"
 HEADLESS=true
 CAPTURE_VIDEO=true
+SKIP_BUILD=false
 BOOT_TIMEOUT=120
 EMULATOR_STARTED_BY_US=false
 
@@ -41,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             CAPTURE_VIDEO=false
             shift
             ;;
+        --skip-build)
+            SKIP_BUILD=true
+            shift
+            ;;
         --avd)
             AVD_NAME="$2"
             shift 2
@@ -53,6 +59,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --gui         Show emulator window (default: headless)"
             echo "  --no-video    Skip video recording (screenshots only)"
+            echo "  --skip-build  Skip APK build/install (use existing APKs)"
             echo "  --avd <name>  Use specific AVD (default: Medium_Phone_API_35)"
             echo "  --help, -h    Show this help message"
             echo ""
@@ -196,6 +203,30 @@ echo ""
 
 MARKER_PATTERN="CAPTURE_MARKER"
 
+# APK paths
+APP_APK="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+TEST_APK="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+
+# Function: build and install APKs
+build_and_install_apks() {
+    echo -e "${BLUE}Building APKs...${NC}"
+    cd android
+    ./gradlew assembleDebug assembleDebugAndroidTest --quiet
+    cd ..
+    
+    if [ ! -f "$APP_APK" ] || [ ! -f "$TEST_APK" ]; then
+        echo -e "${RED}ERROR: APK build failed${NC}"
+        exit 1
+    fi
+    echo -e "  ${GREEN}✓${NC} APKs built"
+    
+    echo -e "${BLUE}Installing APKs...${NC}"
+    $ADB_EMU install -r -g "$APP_APK" >/dev/null
+    echo -e "  ${GREEN}✓${NC} App APK installed"
+    $ADB_EMU install -r -g "$TEST_APK" >/dev/null
+    echo -e "  ${GREEN}✓${NC} Test APK installed"
+}
+
 # Function: run a capture pass (test + screenshot collection)
 # Args: $1 = mode label (light/dark), $2 = local output directory for screenshots
 run_capture_pass() {
@@ -230,17 +261,15 @@ run_capture_pass() {
     ) &
     local logcat_pid=$!
 
-    # Run the capture test
+    # Run the capture test directly via am instrument (faster than Gradle)
     echo ""
     echo -e "${BLUE}Running capture test flow ($mode mode)...${NC}"
     echo ""
 
-    cd android
-    local test_exit=0
-    ANDROID_SERIAL="$EMU_SERIAL" ./gradlew connectedAndroidTest \
-        -Pandroid.testInstrumentationRunnerArguments.class=org.example.dictapp.AppCaptureTest \
-        --info 2>&1 | grep -E "> Task|BUILD|PASSED|FAILED|captureAppFlow|SEVERE" || test_exit=$?
-    cd ..
+    $ADB_EMU shell am instrument -w \
+        -e class org.example.dictapp.AppCaptureTest \
+        org.example.dictapp.test/androidx.test.runner.AndroidJUnitRunner \
+        2>&1 | grep -E "OK\|FAILURES\|Error\|captureAppFlow\|captureOutlierCases" || true
 
     # Wait for final screenshot
     sleep 2
@@ -264,6 +293,23 @@ run_capture_pass() {
         echo -e "  ${YELLOW}!${NC} No screenshots captured ($mode mode)"
     fi
 }
+
+# Build and install APKs (unless --skip-build)
+if [ "$SKIP_BUILD" = true ]; then
+    echo -e "${YELLOW}Skipping build (--skip-build)${NC}"
+    if [ ! -f "$APP_APK" ] || [ ! -f "$TEST_APK" ]; then
+        echo -e "${RED}ERROR: APKs not found. Run without --skip-build first.${NC}"
+        exit 1
+    fi
+    # Still need to ensure APKs are installed
+    echo -e "${BLUE}Installing APKs...${NC}"
+    $ADB_EMU install -r -g "$APP_APK" >/dev/null
+    $ADB_EMU install -r -g "$TEST_APK" >/dev/null
+    echo -e "  ${GREEN}✓${NC} APKs installed"
+else
+    build_and_install_apks
+fi
+echo ""
 
 # Start video recording in background (if enabled)
 VIDEO_PID=""
