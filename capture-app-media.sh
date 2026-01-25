@@ -780,17 +780,16 @@ HTMLTOGGLE
 HTMLNAVEND
 
     # Helper: emit a screenshot card
-    # Usage: emit_card <filename> <label> <index>
+    # Usage: emit_card <filename> <label>
     emit_card() {
         local filename="$1"
         local label="$2"
-        local idx="$3"
         local dark_img=""
         if [ -f "$SCREENSHOT_DIR_DARK/$filename" ]; then
             dark_img="<img class=\"img-dark\" src=\"screenshots-dark/$filename\" alt=\"$label\">"
         fi
         cat >> "$html_file" << HTMLCARD
-                <div class="screenshot-card" onclick="openLightbox($idx)">
+                <div class="screenshot-card" onclick="openLightbox(this)">
                     <img class="img-light" src="screenshots/$filename" alt="$label">
                     $dark_img
                     <div class="label">$label</div>
@@ -799,15 +798,9 @@ HTMLCARD
     }
 
     # Categorize screenshots into sections
-    local index=0
-    local search_cards=""
-    local definition_cards=""
-    local edge_long_cards=""
-    local edge_many_cards=""
-    local edge_missing_cards=""
     local found_screenshots=false
 
-    # Build arrays of (filename, label, index) per section
+    # Build arrays of (filename, label) per section
     declare -a search_files=() definition_files=() edge_long_files=() edge_many_files=() edge_missing_files=()
 
     if [ -d "$SCREENSHOT_DIR" ]; then
@@ -819,20 +812,19 @@ HTMLCARD
 
             case "$fname" in
                 01_*|02_*|04_*|05_*|07_*)
-                    search_files+=("$filename|$label|$index") ;;
+                    search_files+=("$filename|$label") ;;
                 03_*|03b_*|06_*|06b_*|06c_*)
-                    definition_files+=("$filename|$label|$index") ;;
+                    definition_files+=("$filename|$label") ;;
                 outlier_01*|outlier_03*|outlier_04*)
-                    edge_long_files+=("$filename|$label|$index") ;;
+                    edge_long_files+=("$filename|$label") ;;
                 outlier_02*)
-                    edge_many_files+=("$filename|$label|$index") ;;
+                    edge_many_files+=("$filename|$label") ;;
                 outlier_05*|outlier_06*)
-                    edge_missing_files+=("$filename|$label|$index") ;;
+                    edge_missing_files+=("$filename|$label") ;;
                 *)
                     # Fallback: put uncategorized in search section
-                    search_files+=("$filename|$label|$index") ;;
+                    search_files+=("$filename|$label") ;;
             esac
-            index=$((index + 1))
         done
     fi
 
@@ -844,8 +836,8 @@ HTMLCARD
             <div class="gallery">
 HTMLSEC
         for entry in "${search_files[@]}"; do
-            IFS='|' read -r f l i <<< "$entry"
-            emit_card "$f" "$l" "$i"
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
         echo '        </section>' >> "$html_file"
@@ -858,8 +850,8 @@ HTMLSEC
             <div class="gallery">
 HTMLSEC
         for entry in "${definition_files[@]}"; do
-            IFS='|' read -r f l i <<< "$entry"
-            emit_card "$f" "$l" "$i"
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
         echo '        </section>' >> "$html_file"
@@ -872,8 +864,8 @@ HTMLSEC
             <div class="gallery">
 HTMLSEC
         for entry in "${edge_long_files[@]}"; do
-            IFS='|' read -r f l i <<< "$entry"
-            emit_card "$f" "$l" "$i"
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
         echo '        </section>' >> "$html_file"
@@ -886,8 +878,8 @@ HTMLSEC
             <div class="gallery">
 HTMLSEC
         for entry in "${edge_many_files[@]}"; do
-            IFS='|' read -r f l i <<< "$entry"
-            emit_card "$f" "$l" "$i"
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
         echo '        </section>' >> "$html_file"
@@ -900,8 +892,8 @@ HTMLSEC
             <div class="gallery">
 HTMLSEC
         for entry in "${edge_missing_files[@]}"; do
-            IFS='|' read -r f l i <<< "$entry"
-            emit_card "$f" "$l" "$i"
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
         echo '        </section>' >> "$html_file"
@@ -958,8 +950,11 @@ HTMLVIDEO
             }
         }
         
-        function openLightbox(index) {
-            currentIndex = index;
+        function openLightbox(card) {
+            const images = getVisibleImages();
+            const cls = darkMode ? 'img-dark' : 'img-light';
+            const clickedImg = card.querySelector('img.' + cls);
+            currentIndex = images.indexOf(clickedImg);
             updateLightbox();
             document.getElementById('lightbox').classList.add('active');
             document.body.style.overflow = 'hidden';
