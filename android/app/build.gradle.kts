@@ -88,6 +88,12 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // 16KB page size alignment for Android 15+ devices
+        jniLibs {
+            useLegacyPackaging = false
+            // Ensure proper alignment for all native libraries
+            keepDebugSymbols += "**/*.so"
+        }
     }
 
     // Source sets for JNI libraries
@@ -137,17 +143,17 @@ dependencies {
 
     // Zstd decompression
     implementation("org.apache.commons:commons-compress:1.26.0")
-    implementation("com.github.luben:zstd-jni:1.5.6-3@aar")
+    implementation("com.github.luben:zstd-jni:1.5.7-6@aar")
 
-    // Testing
+    // Testing - updated for Android 15+ (SDK 35+) compatibility
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    androidTestImplementation("com.google.truth:truth:1.1.5")
+    androidTestImplementation("com.google.truth:truth:1.4.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Benchmarking
-    androidTestImplementation("androidx.benchmark:benchmark-junit4:1.2.3")
+    androidTestImplementation("androidx.benchmark:benchmark-junit4:1.3.3")
 }
