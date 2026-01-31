@@ -66,14 +66,12 @@ The `run-e2e.sh` script provides a unified interface for building, testing, and 
 
 ### Quick Start
 ```bash
-# Build everything
-./run-e2e.sh build
-
-# Install on device
-./run-e2e.sh install --target device
-
-# Capture screenshots
+# Capture screenshots (builds + installs automatically)
 ./run-e2e.sh capture --target device
+
+# Or manually build and install first
+./run-e2e.sh build
+./run-e2e.sh install --target device
 
 # Collect logs
 ./run-e2e.sh logs --target device --filter "DictCore:D DictViewModel:D *:S"
@@ -86,11 +84,20 @@ The `run-e2e.sh` script provides a unified interface for building, testing, and 
 - **build** - Build native libraries and APKs
 - **install** - Install app and test APKs on target
 - **logs** - Collect logcat output with optional filters
-- **capture** - Automated screenshot and video capture
+- **capture** - Automated screenshot and video capture (builds + installs by default)
 - **test** - Run instrumentation tests
 - **clean** - Clean all build artifacts
 
 ### Common Workflows
+
+**Quick screenshot capture (one command):**
+```bash
+# Builds, installs, and captures automatically
+./run-e2e.sh capture --target device
+
+# Skip build if already installed
+./run-e2e.sh capture --target device --skip-build
+```
 
 **Full rebuild and test on device:**
 ```bash
@@ -100,9 +107,9 @@ The `run-e2e.sh` script provides a unified interface for building, testing, and 
 ./run-e2e.sh test --target device
 ```
 
-**Quick screenshot capture:**
+**Fast iteration (screenshots only, no dark mode or video):**
 ```bash
-./run-e2e.sh capture --target emulator --no-video --skip-dark
+./run-e2e.sh capture --target emulator --no-video --skip-dark --skip-build
 ```
 
 **Debug specific issue:**

@@ -71,7 +71,7 @@ Install Options:
 Capture Options:
   --no-video                 Skip video recording
   --skip-dark                Skip dark mode captures
-  --skip-build               Use existing APKs
+  --skip-build               Skip build/install (use existing APKs)
 
 Test Options:
   --class <name>             Run specific test class
@@ -342,6 +342,11 @@ cmd_capture() {
     echo -e "${BLUE}=== Capturing Screenshots ===${NC}"
     echo ""
     
+    # Need Android SDK if building
+    if [ "$SKIP_BUILD" = false ]; then
+        find_android_sdk
+    fi
+    
     # Initialize backend
     local backend_args="--target $TARGET"
     [ -n "$SERIAL" ] && backend_args="$backend_args --serial $SERIAL"
@@ -365,11 +370,44 @@ cmd_capture() {
     echo "Output: $output_dir"
     echo ""
     
-    # Check if app is installed
-    if ! backend_app_installed; then
-        echo -e "${RED}ERROR: App not installed${NC}"
-        echo "Run: $0 install --target $TARGET"
-        exit 1
+    # Build and install (unless --skip-build)
+    if [ "$SKIP_BUILD" = false ]; then
+        # Build
+        echo -e "${BLUE}Building APKs...${NC}"
+        cd android
+        ./gradlew assembleDebug assembleDebugAndroidTest --quiet
+        cd ..
+        echo -e "  ${GREEN}✓${NC} APKs built"
+        echo ""
+        
+        # Install
+        local app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+        local test_apk="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+        
+        if [ ! -f "$app_apk" ]; then
+            echo -e "${RED}ERROR: App APK not found after build${NC}"
+            exit 1
+        fi
+        
+        echo -e "${BLUE}Installing APKs...${NC}"
+        backend_install_apk "$app_apk" | grep -v "^Performing" || true
+        echo -e "  ${GREEN}✓${NC} App installed"
+        
+        if [ -f "$test_apk" ]; then
+            backend_install_apk "$test_apk" | grep -v "^Performing" || true
+            echo -e "  ${GREEN}✓${NC} Test APK installed"
+        fi
+        echo ""
+    else
+        echo -e "${YELLOW}Skipping build (--skip-build)${NC}"
+        echo ""
+        
+        # Verify app is installed
+        if ! backend_app_installed; then
+            echo -e "${RED}ERROR: App not installed${NC}"
+            echo "Run without --skip-build, or install manually first"
+            exit 1
+        fi
     fi
     
     # Run capture flow
