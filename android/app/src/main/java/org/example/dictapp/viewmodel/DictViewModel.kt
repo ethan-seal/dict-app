@@ -265,16 +265,23 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 currentSearchQuery = query
                 currentOffset = 0
+                Log.d(TAG, "performSearch: searching for '$query'")
                 val results = withContext(Dispatchers.IO) {
                     DictCore.searchParsed(query, PAGE_SIZE, 0)
                 }
                 val canLoadMore = results.size >= PAGE_SIZE
                 currentOffset = results.size
+                Log.d(TAG, "performSearch: got ${results.size} results for '$query'")
+                // Log first few result IDs for debugging
+                results.take(3).forEachIndexed { index, result ->
+                    Log.d(TAG, "performSearch: result[$index] id=${result.id}, word='${result.word}'")
+                }
                 _searchState.value = SearchState.Success(
                     results = results,
                     canLoadMore = canLoadMore
                 )
             } catch (e: Exception) {
+                Log.e(TAG, "performSearch: failed for '$query'", e)
                 _searchState.value = SearchState.Error(
                     e.message ?: "Search failed"
                 )
@@ -322,12 +329,16 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
      * @param wordId The unique ID of the word
      */
     fun loadDefinition(wordId: Long) {
+        Log.d(TAG, "loadDefinition: starting for wordId=$wordId")
         viewModelScope.launch {
             _definitionState.value = DefinitionState.Loading
 
             try {
                 val definition = withContext(Dispatchers.IO) {
-                    DictCore.getDefinitionParsed(wordId)
+                    Log.d(TAG, "loadDefinition: calling DictCore.getDefinitionParsed($wordId)")
+                    val result = DictCore.getDefinitionParsed(wordId)
+                    Log.d(TAG, "loadDefinition: DictCore returned ${if (result != null) "definition for '${result.word}'" else "null"}")
+                    result
                 }
 
                 if (definition != null) {
@@ -335,10 +346,13 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
                     val sorted = sortPronunciations(definition.pronunciations, variant)
                     val result = definition.copy(pronunciations = sorted)
                     _definitionState.value = DefinitionState.Success(result)
+                    Log.d(TAG, "loadDefinition: success - word='${result.word}', definitions=${result.definitions.size}")
                 } else {
+                    Log.w(TAG, "loadDefinition: definition was null for wordId=$wordId")
                     _definitionState.value = DefinitionState.Error("Definition not found")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "loadDefinition: exception for wordId=$wordId", e)
                 _definitionState.value = DefinitionState.Error(
                     e.message ?: "Failed to load definition"
                 )

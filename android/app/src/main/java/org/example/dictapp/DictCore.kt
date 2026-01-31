@@ -1,5 +1,6 @@
 package org.example.dictapp
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
@@ -83,10 +84,17 @@ object DictCore {
      * @return List of SearchResult objects
      */
     fun searchParsed(query: String, limit: Int = 50, offset: Int = 0): List<SearchResult> {
-        val json = search(query, limit, offset) ?: return emptyList()
+        val json = search(query, limit, offset)
+        if (json == null) {
+            Log.w(TAG, "searchParsed('$query'): native returned null")
+            return emptyList()
+        }
         return try {
-            gson.fromJson(json, SEARCH_RESULT_LIST_TYPE)
+            val results: List<SearchResult> = gson.fromJson(json, SEARCH_RESULT_LIST_TYPE)
+            Log.d(TAG, "searchParsed('$query'): got ${results.size} results")
+            results
         } catch (e: Exception) {
+            Log.e(TAG, "searchParsed('$query'): Gson parse failed", e)
             emptyList()
         }
     }
@@ -98,13 +106,26 @@ object DictCore {
      * @return FullDefinition object, or null if not found
      */
     fun getDefinitionParsed(wordId: Long): FullDefinition? {
-        val json = getDefinition(wordId) ?: return null
+        val json = getDefinition(wordId)
+        if (json == null) {
+            Log.w(TAG, "getDefinitionParsed($wordId): native returned null")
+            return null
+        }
+        Log.d(TAG, "getDefinitionParsed($wordId): got JSON length=${json.length}")
         return try {
-            gson.fromJson(json, FullDefinition::class.java)
+            val result = gson.fromJson(json, FullDefinition::class.java)
+            if (result == null) {
+                Log.w(TAG, "getDefinitionParsed($wordId): Gson returned null (JSON was 'null'?)")
+            }
+            result
         } catch (e: Exception) {
+            Log.e(TAG, "getDefinitionParsed($wordId): Gson parse failed", e)
+            Log.e(TAG, "getDefinitionParsed($wordId): JSON preview: ${json.take(500)}")
             null
         }
     }
+    
+    private const val TAG = "DictCore"
 }
 
 /**
