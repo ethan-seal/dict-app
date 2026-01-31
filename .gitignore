@@ -114,3 +114,4 @@ Desktop.ini
 .env.local
 *.pem
 *.key
+.beads/
