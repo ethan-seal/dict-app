@@ -418,7 +418,7 @@ cmd_capture() {
         local output_dir="$2"
         
         echo ""
-        echo -e "${BLUE}=== $mode Mode ===${NC}"
+        echo -e "${BLUE}=== $mode Mode: Main Flow ===${NC}"
         
         # Restart app
         echo -e "  ${YELLOW}Restarting app...${NC}"
@@ -426,24 +426,16 @@ cmd_capture() {
         
         # Screenshot 01: Empty search
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_empty.png${NC}... "
-        backend_screenshot "search_empty" "$output_dir/$(printf '%02d' $count)_search_empty.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_initial_state.png${NC}... "
+        backend_screenshot "initial_state" "$output_dir/$(printf '%02d' $count)_initial_state.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 02: Type query
-        echo -e "  ${YELLOW}Typing 'hello'...${NC}"
+        # Screenshot 02: Search "hello" + results
+        echo -e "  ${YELLOW}Searching 'hello'...${NC}"
         backend_tap_search
         backend_wait 0.3
         backend_type "hello"
-        backend_wait 1
-        
-        count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_typing.png${NC}... "
-        backend_screenshot "search_typing" "$output_dir/$(printf '%02d' $count)_search_typing.png"
-        echo -e "${GREEN}done${NC}"
-        
-        # Screenshot 03: Results
-        echo -e "  ${YELLOW}Dismissing keyboard...${NC}"
+        backend_wait 1.5
         backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
         backend_wait 0.8
         
@@ -452,60 +444,186 @@ cmd_capture() {
         backend_screenshot "search_results" "$output_dir/$(printf '%02d' $count)_search_results.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 04: Definition
-        echo -e "  ${YELLOW}Opening definition...${NC}"
+        # Screenshot 03: View hello definition
+        echo -e "  ${YELLOW}Opening hello definition...${NC}"
         backend_tap_first_result
         backend_wait 2
         
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_top.png${NC}... "
-        backend_screenshot "definition_top" "$output_dir/$(printf '%02d' $count)_definition_top.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_hello.png${NC}... "
+        backend_screenshot "definition_hello" "$output_dir/$(printf '%02d' $count)_definition_hello.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 05: Scrolled definition
-        echo -e "  ${YELLOW}Scrolling...${NC}"
+        # Screenshot 03b: Scroll to show definitions with examples
+        echo -e "  ${YELLOW}Scrolling to definitions...${NC}"
         backend_swipe_up
         backend_wait 0.5
         
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_scrolled.png${NC}... "
-        backend_screenshot "definition_scrolled" "$output_dir/$(printf '%02d' $count)_definition_scrolled.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)b_hello_definitions.png${NC}... "
+        backend_screenshot "hello_definitions" "$output_dir/$(printf '%02d' $count)b_hello_definitions.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 06: Back to search
+        # Screenshot 04: Navigate back
         echo -e "  ${YELLOW}Going back...${NC}"
         backend_back
         backend_wait 0.8
         
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_back_to_search.png${NC}... "
-        backend_screenshot "back_to_search" "$output_dir/$(printf '%02d' $count)_back_to_search.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_back_to_results.png${NC}... "
+        backend_screenshot "back_to_results" "$output_dir/$(printf '%02d' $count)_back_to_results.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 07: New search
-        echo -e "  ${YELLOW}Searching 'computer'...${NC}"
+        # Screenshot 05: Search for "apple"
+        echo -e "  ${YELLOW}Searching 'apple'...${NC}"
         backend_tap_search
         backend_wait 0.5
         backend_clear_text
-        backend_type "computer"
+        backend_type "apple"
         backend_wait 1.5
+        backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
+        backend_wait 0.8
         
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_computer.png${NC}... "
-        backend_screenshot "search_computer" "$output_dir/$(printf '%02d' $count)_search_computer.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_apple.png${NC}... "
+        backend_screenshot "search_apple" "$output_dir/$(printf '%02d' $count)_search_apple.png"
         echo -e "${GREEN}done${NC}"
         
-        # Screenshot 08: Computer definition
-        echo -e "  ${YELLOW}Opening computer definition...${NC}"
+        # Screenshot 06: View apple definition
+        echo -e "  ${YELLOW}Opening apple definition...${NC}"
         backend_tap_first_result
+        backend_wait 2
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_apple.png${NC}... "
+        backend_screenshot "definition_apple" "$output_dir/$(printf '%02d' $count)_definition_apple.png"
+        echo -e "${GREEN}done${NC}"
+        
+        # Screenshot 06b: Scroll to show definitions
+        echo -e "  ${YELLOW}Scrolling to definitions...${NC}"
+        backend_swipe_up
+        backend_wait 0.5
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)b_apple_definitions.png${NC}... "
+        backend_screenshot "apple_definitions" "$output_dir/$(printf '%02d' $count)b_apple_definitions.png"
+        echo -e "${GREEN}done${NC}"
+        
+        # Screenshot 06c: Scroll to show translations (if present)
+        echo -e "  ${YELLOW}Scrolling to translations...${NC}"
+        backend_swipe_up
+        backend_wait 0.5
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)c_apple_translations.png${NC}... "
+        backend_screenshot "apple_translations" "$output_dir/$(printf '%02d' $count)c_apple_translations.png"
+        echo -e "${GREEN}done${NC}"
+        
+        # Screenshot 07: Show no results case
+        echo -e "  ${YELLOW}Testing no results...${NC}"
+        backend_back
+        backend_wait 0.8
+        backend_tap_search
+        backend_wait 0.5
+        backend_clear_text
+        backend_type "xyznotfound"
         backend_wait 1.5
         
         count=$((count + 1))
-        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_computer.png${NC}... "
-        backend_screenshot "definition_computer" "$output_dir/$(printf '%02d' $count)_definition_computer.png"
+        echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_no_results.png${NC}... "
+        backend_screenshot "no_results" "$output_dir/$(printf '%02d' $count)_no_results.png"
         echo -e "${GREEN}done${NC}"
         
-        echo -e "  ${GREEN}Captured $count screenshots${NC}"
+        echo -e "  ${GREEN}Main flow: $count screenshots${NC}"
+        
+        # === OUTLIER CASES ===
+        echo ""
+        echo -e "${BLUE}=== $mode Mode: Edge Cases ===${NC}"
+        
+        # Outlier 01: Long etymology (blizzard)
+        echo -e "  ${YELLOW}Testing long etymology (blizzard)...${NC}"
+        backend_tap_search
+        backend_wait 0.5
+        backend_clear_text
+        backend_type "blizzard"
+        backend_wait 1.5
+        backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
+        backend_wait 0.8
+        backend_tap_first_result
+        backend_wait 2
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_long_etymology.png${NC}... "
+        backend_screenshot "long_etymology" "$output_dir/outlier_$(printf '%02d' $count)_long_etymology.png"
+        echo -e "${GREEN}done${NC}"
+        
+        backend_swipe_up
+        backend_wait 0.5
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_definitions.png${NC}... "
+        backend_screenshot "blizzard_definitions" "$output_dir/outlier_$(printf '%02d' $count)_definitions.png"
+        echo -e "${GREEN}done${NC}"
+        
+        # Outlier 03: Many definitions (draw)
+        echo -e "  ${YELLOW}Testing many definitions (draw)...${NC}"
+        backend_back
+        backend_wait 0.8
+        backend_tap_search
+        backend_wait 0.5
+        backend_clear_text
+        backend_type "draw"
+        backend_wait 1.5
+        backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
+        backend_wait 0.8
+        backend_tap_first_result
+        backend_wait 2
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_many_definitions.png${NC}... "
+        backend_screenshot "many_definitions" "$output_dir/outlier_$(printf '%02d' $count)_many_definitions.png"
+        echo -e "${GREEN}done${NC}"
+        
+        backend_swipe_up
+        backend_wait 0.5
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_draw_mid.png${NC}... "
+        backend_screenshot "draw_definitions_mid" "$output_dir/outlier_$(printf '%02d' $count)_draw_mid.png"
+        echo -e "${GREEN}done${NC}"
+        
+        backend_swipe_up
+        backend_wait 0.5
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_draw_end.png${NC}... "
+        backend_screenshot "draw_definitions_end" "$output_dir/outlier_$(printf '%02d' $count)_draw_end.png"
+        echo -e "${GREEN}done${NC}"
+        
+        # Outlier 04: Long definition text (parados)
+        echo -e "  ${YELLOW}Testing long definition (parados)...${NC}"
+        backend_back
+        backend_wait 0.8
+        backend_tap_search
+        backend_wait 0.5
+        backend_clear_text
+        backend_type "parados"
+        backend_wait 1.5
+        backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
+        backend_wait 0.8
+        backend_tap_first_result
+        backend_wait 2
+        
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_long_definition.png${NC}... "
+        backend_screenshot "long_definition" "$output_dir/outlier_$(printf '%02d' $count)_long_definition.png"
+        echo -e "${GREEN}done${NC}"
+        
+        backend_swipe_up
+        backend_wait 0.5
+        count=$((count + 1))
+        echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_scrolled.png${NC}... "
+        backend_screenshot "long_definition_scrolled" "$output_dir/outlier_$(printf '%02d' $count)_scrolled.png"
+        echo -e "${GREEN}done${NC}"
+        
+        echo -e "  ${GREEN}Total screenshots: $count${NC}"
     }
     
     # Light mode
@@ -557,121 +675,659 @@ generate_html_viewer() {
     local timestamp="$5"
     
     local html_file="$output_dir/index.html"
+    local has_video="false"
+    [ -f "$output_dir/app-flow.mp4" ] && has_video="true"
+    
+    # Get device info for display
+    local device_html=""
+    if [ -n "$device_model" ] && [ "$device_model" != "unknown" ]; then
+        device_html="<div class=\"device\">$device_model</div>"
+    fi
+    
+    # Get git commit info
+    local commit_hash=""
+    local commit_html=""
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        commit_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+        if [ -n "$commit_hash" ]; then
+            # Check for dirty state (uncommitted changes)
+            if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+                commit_hash="${commit_hash}+"
+            fi
+            
+            # Try to get GitHub URL for linking
+            local remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+            local github_url=""
+            if echo "$remote_url" | grep -qE 'github\.com[:/]'; then
+                # Extract owner/repo using sed (more portable than bash regex)
+                local owner_repo=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]([^/]+)/([^/]+).*|\1/\2|' | sed 's/\.git$//')
+                local owner="${owner_repo%%/*}"
+                local repo="${owner_repo##*/}"
+                github_url="https://github.com/$owner/$repo/commit/${commit_hash%+}"
+            fi
+            
+            if [ -n "$github_url" ]; then
+                commit_html="<div class=\"commit\"><a href=\"$github_url\" target=\"_blank\" rel=\"noopener\">commit: $commit_hash</a></div>"
+            else
+                commit_html="<div class=\"commit\">commit: $commit_hash</div>"
+            fi
+        fi
+    fi
+    
+    # Format timestamp for display (e.g., "Jan 21, 2026 at 1:32 PM")
+    # TIMESTAMP format: YYYYMMDD_HHMMSS
+    local year=${TIMESTAMP:0:4}
+    local month=${TIMESTAMP:4:2}
+    local day=${TIMESTAMP:6:2}
+    local hour=${TIMESTAMP:9:2}
+    local min=${TIMESTAMP:11:2}
+    
+    # Convert month number to name
+    local month_name
+    case "$month" in
+        01) month_name="Jan" ;; 02) month_name="Feb" ;; 03) month_name="Mar" ;;
+        04) month_name="Apr" ;; 05) month_name="May" ;; 06) month_name="Jun" ;;
+        07) month_name="Jul" ;; 08) month_name="Aug" ;; 09) month_name="Sep" ;;
+        10) month_name="Oct" ;; 11) month_name="Nov" ;; 12) month_name="Dec" ;;
+    esac
+    
+    # Convert to 12-hour format with AM/PM
+    local hour_num=$((10#$hour))
+    local ampm="AM"
+    if [ $hour_num -ge 12 ]; then
+        ampm="PM"
+        [ $hour_num -gt 12 ] && hour_num=$((hour_num - 12))
+    fi
+    [ $hour_num -eq 0 ] && hour_num=12
+    
+    # Remove leading zero from day
+    local day_num=$((10#$day))
+    
+    local display_ts="$month_name $day_num, $year at $hour_num:$min $ampm"
     
     # Check if dark screenshots exist
-    local has_light=$(ls "$light_dir"/*.png 2>/dev/null | head -1)
-    local has_dark=$(ls "$dark_dir"/*.png 2>/dev/null | head -1)
-    
+    local has_dark="false"
+    if [ -d "$light_dir_DARK" ] && ls "$light_dir_DARK"/*.png &>/dev/null; then
+        has_dark="true"
+    fi
+
+    # Determine which sections have content
+    local has_search=false
+    local has_definition=false
+    local has_edge_long=false
+    local has_edge_many=false
+    local has_edge_missing=false
+    if [ -d "$light_dir" ]; then
+        for img in $(ls -1 "$light_dir"/*.png 2>/dev/null); do
+            local fname=$(basename "$img" .png)
+            case "$fname" in
+                01_*|02_*|04_*|05_*|07_*) has_search=true ;;
+                03_*|03b_*|06_*|06b_*|06c_*) has_definition=true ;;
+                outlier_01*|outlier_03*|outlier_04*) has_edge_long=true ;;
+                outlier_02*) has_edge_many=true ;;
+                outlier_05*|outlier_06*) has_edge_missing=true ;;
+            esac
+        done
+    fi
+
     # Start HTML
-    cat > "$html_file" << 'HTMLHEAD'
+    cat > "$html_file" << HTMLHEAD
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Screenshots</title>
+    <title>App Capture - $display_ts</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-        header { margin-bottom: 2rem; }
-        h1 { font-size: 1.5rem; font-weight: 600; }
-        .meta { color: #888; font-size: 0.9rem; margin-top: 0.5rem; }
-        .device { color: #6a9fb5; }
-        .toggle { display: flex; gap: 1rem; margin: 1.5rem 0; }
-        .toggle button { padding: 0.5rem 1rem; border: 1px solid #444; background: #252542; color: #aaa; border-radius: 6px; cursor: pointer; }
-        .toggle button.active { background: #3a3a6a; color: #fff; border-color: #5a5a8a; }
-        .section { margin-bottom: 2rem; }
-        .section h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #333; }
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.5rem; }
-        .card { background: #252542; border-radius: 12px; overflow: hidden; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-4px); }
-        .card img { width: 100%; display: block; cursor: pointer; }
-        .card .label { padding: 0.75rem; font-size: 0.8rem; color: #aaa; text-align: center; }
-        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; justify-content: center; align-items: center; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 220px;
+            height: 100vh;
+            background: #151528;
+            border-right: 1px solid #2a2a4a;
+            padding: 1.5rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        .sidebar-header {
+            text-align: center;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .sidebar-header h1 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .sidebar-header .timestamp {
+            color: #888;
+            font-size: 0.75rem;
+        }
+        .sidebar-header .commit {
+            color: #666;
+            font-size: 0.7rem;
+            font-family: monospace;
+            margin-top: 0.2rem;
+        }
+        .sidebar-header .commit a {
+            color: #6a9fb5;
+            text-decoration: none;
+        }
+        .sidebar-header .commit a:hover { text-decoration: underline; }
+        .sidebar-header .device {
+            color: #6a9fb5;
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+        }
+
+        /* Theme toggle in sidebar */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .theme-toggle .toggle-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .theme-toggle .toggle-label.active { color: #eee; }
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            background: #333;
+            border-radius: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.dark { background: #555; }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch.dark::after { transform: translateX(18px); }
+
+        /* Sidebar navigation */
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .sidebar-nav a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .sidebar-nav a:hover {
+            background: #252542;
+            color: #eee;
+        }
+        .sidebar-nav a.active {
+            background: #2a2a5a;
+            color: #fff;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: 220px;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        /* Sections */
+        .capture-section {
+            margin-bottom: 3rem;
+            scroll-margin-top: 1.5rem;
+        }
+        .capture-section h2 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: #ccc;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2a2a4a;
+        }
+
+        /* Gallery grid */
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+        .screenshot-card {
+            background: #252542;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .screenshot-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        }
+        .screenshot-card img { width: 100%; height: auto; display: block; }
+        .screenshot-card img.img-dark { display: none; }
+        body.mode-dark .screenshot-card img.img-light { display: none; }
+        body.mode-dark .screenshot-card img.img-dark { display: block; }
+        .screenshot-card .label {
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            color: #aaa;
+            text-align: center;
+            background: #1e1e36;
+        }
+
+        /* Video section */
+        .video-section { text-align: center; }
+        .video-section h2 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: #ccc;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        video {
+            max-width: 400px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
         .lightbox.active { display: flex; }
-        .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
-        .lightbox .close { position: absolute; top: 1rem; right: 1.5rem; font-size: 2rem; color: #888; cursor: pointer; }
-        .hidden { display: none !important; }
+        .lightbox img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+        .lightbox .close {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 2rem;
+            color: #888;
+            cursor: pointer;
+        }
+        .lightbox .close:hover { color: #fff; }
+        .lightbox .nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2rem;
+            color: #888;
+            cursor: pointer;
+            padding: 1rem;
+            user-select: none;
+        }
+        .lightbox .nav:hover { color: #fff; }
+        .lightbox .nav.prev { left: 1rem; }
+        .lightbox .nav.next { right: 1rem; }
+        .lightbox .caption {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .no-content { text-align: center; padding: 3rem; color: #666; }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                width: 180px;
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .gallery { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+            .menu-toggle {
+                display: flex !important;
+            }
+        }
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 101;
+            background: #252542;
+            border: 1px solid #2a2a4a;
+            color: #eee;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Dict App Screenshots</h1>
-            <div class="meta">
+    <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>Dict App</h1>
+            <div class="timestamp">$display_ts</div>
+            $device_html
+            $commit_html
+        </div>
 HTMLHEAD
 
-    echo "                <span class=\"device\">$device_model</span> • $(date -d "@$(date -d "$timestamp" +%s 2>/dev/null || date +%s)" '+%b %d, %Y at %I:%M %p' 2>/dev/null || date '+%b %d, %Y at %I:%M %p')" >> "$html_file"
-    
-    cat >> "$html_file" << 'HTMLHEAD2'
-            </div>
-        </header>
-HTMLHEAD2
-
-    # Toggle if both modes exist
-    if [ -n "$has_light" ] && [ -n "$has_dark" ]; then
-        cat >> "$html_file" << 'TOGGLE'
-        <div class="toggle">
-            <button class="active" onclick="showMode('light')">Light Mode</button>
-            <button onclick="showMode('dark')">Dark Mode</button>
+    # Add theme toggle if dark screenshots exist
+    if [ "$has_dark" = "true" ]; then
+        cat >> "$html_file" << 'HTMLTOGGLE'
+        <div class="theme-toggle">
+            <span class="toggle-label active" id="label-light">Light</span>
+            <div class="toggle-switch" id="theme-switch" onclick="toggleTheme()"></div>
+            <span class="toggle-label" id="label-dark">Dark</span>
         </div>
-TOGGLE
+HTMLTOGGLE
     fi
-    
-    # Light section
-    if [ -n "$has_light" ]; then
-        echo '        <div class="section" id="light-section">' >> "$html_file"
-        echo '            <h2>Light Mode</h2>' >> "$html_file"
-        echo '            <div class="gallery">' >> "$html_file"
-        for img in "$light_dir"/*.png; do
-            local name=$(basename "$img" .png | sed 's/^[0-9]*_//;s/_/ /g')
-            echo "                <div class=\"card\" onclick=\"openLightbox('screenshots/$(basename "$img")')\"><img src=\"screenshots/$(basename "$img")\"><div class=\"label\">$name</div></div>" >> "$html_file"
+
+    # Add sidebar navigation
+    echo '        <nav class="sidebar-nav">' >> "$html_file"
+    [ "$has_search" = true ] && echo '            <a href="#search">Search</a>' >> "$html_file"
+    [ "$has_definition" = true ] && echo '            <a href="#definition-view">Definition View</a>' >> "$html_file"
+    [ "$has_edge_long" = true ] && echo '            <a href="#edge-long-content">Edge: Long Content</a>' >> "$html_file"
+    [ "$has_edge_many" = true ] && echo '            <a href="#edge-many-items">Edge: Many Items</a>' >> "$html_file"
+    [ "$has_edge_missing" = true ] && echo '            <a href="#edge-missing-sections">Edge: Missing Sections</a>' >> "$html_file"
+    [ "$has_video" = true ] && echo '            <a href="#video">Video</a>' >> "$html_file"
+    cat >> "$html_file" << 'HTMLNAVEND'
+        </nav>
+    </aside>
+    <main class="main-content">
+HTMLNAVEND
+
+    # Helper: emit a screenshot card
+    # Usage: emit_card <filename> <label>
+    emit_card() {
+        local filename="$1"
+        local label="$2"
+        local dark_img=""
+        if [ -f "$light_dir_DARK/$filename" ]; then
+            dark_img="<img class=\"img-dark\" src=\"screenshots-dark/$filename\" alt=\"$label\">"
+        fi
+        cat >> "$html_file" << HTMLCARD
+                <div class="screenshot-card" onclick="openLightbox(this)">
+                    <img class="img-light" src="screenshots/$filename" alt="$label">
+                    $dark_img
+                    <div class="label">$label</div>
+                </div>
+HTMLCARD
+    }
+
+    # Categorize screenshots into sections
+    local found_screenshots=false
+
+    # Build arrays of (filename, label) per section
+    declare -a search_files=() definition_files=() edge_long_files=() edge_many_files=() edge_missing_files=()
+
+    if [ -d "$light_dir" ]; then
+        for img in $(ls -1 "$light_dir"/*.png 2>/dev/null | sort); do
+            found_screenshots=true
+            local filename=$(basename "$img")
+            local fname=$(basename "$img" .png)
+            local label=$(echo "$fname" | sed 's/^outlier_[0-9]*[a-z]*_//;s/^[0-9]*[a-z]*_//;s/_/ /g')
+
+            case "$fname" in
+                01_*|02_*|04_*|05_*|07_*)
+                    search_files+=("$filename|$label") ;;
+                03_*|03b_*|06_*|06b_*|06c_*)
+                    definition_files+=("$filename|$label") ;;
+                outlier_01*|outlier_03*|outlier_04*)
+                    edge_long_files+=("$filename|$label") ;;
+                outlier_02*)
+                    edge_many_files+=("$filename|$label") ;;
+                outlier_05*|outlier_06*)
+                    edge_missing_files+=("$filename|$label") ;;
+                *)
+                    # Fallback: put uncategorized in search section
+                    search_files+=("$filename|$label") ;;
+            esac
+        done
+    fi
+
+    # Emit each section
+    if [ ${#search_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="search">
+            <h2>Search</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${search_files[@]}"; do
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
-        echo '        </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
     fi
-    
-    # Dark section
-    if [ -n "$has_dark" ]; then
-        echo '        <div class="section hidden" id="dark-section">' >> "$html_file"
-        echo '            <h2>Dark Mode</h2>' >> "$html_file"
-        echo '            <div class="gallery">' >> "$html_file"
-        for img in "$dark_dir"/*.png; do
-            local name=$(basename "$img" .png | sed 's/^[0-9]*_//;s/_/ /g')
-            echo "                <div class=\"card\" onclick=\"openLightbox('screenshots-dark/$(basename "$img")')\"><img src=\"screenshots-dark/$(basename "$img")\"><div class=\"label\">$name</div></div>" >> "$html_file"
+
+    if [ ${#definition_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="definition-view">
+            <h2>Definition View</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${definition_files[@]}"; do
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
         done
         echo '            </div>' >> "$html_file"
-        echo '        </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
     fi
-    
+
+    if [ ${#edge_long_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-long-content">
+            <h2>Edge Cases: Long Content</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_long_files[@]}"; do
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#edge_many_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-many-items">
+            <h2>Edge Cases: Many Items</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_many_files[@]}"; do
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ ${#edge_missing_files[@]} -gt 0 ]; then
+        cat >> "$html_file" << 'HTMLSEC'
+        <section class="capture-section" id="edge-missing-sections">
+            <h2>Edge Cases: Missing Sections</h2>
+            <div class="gallery">
+HTMLSEC
+        for entry in "${edge_missing_files[@]}"; do
+            IFS='|' read -r f l <<< "$entry"
+            emit_card "$f" "$l"
+        done
+        echo '            </div>' >> "$html_file"
+        echo '        </section>' >> "$html_file"
+    fi
+
+    if [ "$found_screenshots" = false ]; then
+        echo '        <div class="no-content">No screenshots captured</div>' >> "$html_file"
+    fi
+
+    # Add video section at the bottom if video exists
+    if [ "$has_video" = "true" ]; then
+        cat >> "$html_file" << 'HTMLVIDEO'
+        <section class="capture-section video-section" id="video">
+            <h2>App Flow Video</h2>
+            <video controls>
+                <source src="app-flow.mp4" type="video/mp4">
+                Your browser does not support video playback.
+            </video>
+        </section>
+HTMLVIDEO
+    fi
+
+    # Close main content and add lightbox + script
     cat >> "$html_file" << 'HTMLEND'
+    </main>
+    
+    <div class="lightbox" id="lightbox">
+        <span class="close" onclick="closeLightbox()">&times;</span>
+        <span class="nav prev" onclick="navigate(-1)">&#10094;</span>
+        <span class="nav next" onclick="navigate(1)">&#10095;</span>
+        <img id="lightbox-img" src="" alt="">
+        <div class="caption" id="lightbox-caption"></div>
     </div>
-    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
-        <span class="close">&times;</span>
-        <img id="lightbox-img" src="">
-    </div>
+    
     <script>
-        function showMode(mode) {
-            document.querySelectorAll('.toggle button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('light-section').classList.toggle('hidden', mode !== 'light');
-            document.getElementById('dark-section').classList.toggle('hidden', mode !== 'dark');
+        let darkMode = false;
+        let currentIndex = 0;
+
+        function getVisibleImages() {
+            const cls = darkMode ? 'img-dark' : 'img-light';
+            return Array.from(document.querySelectorAll('.screenshot-card img.' + cls));
         }
-        function openLightbox(src) {
-            document.getElementById('lightbox-img').src = src;
+
+        function toggleTheme() {
+            darkMode = !darkMode;
+            document.body.classList.toggle('mode-dark', darkMode);
+            const sw = document.getElementById('theme-switch');
+            sw.classList.toggle('dark', darkMode);
+            document.getElementById('label-light').classList.toggle('active', !darkMode);
+            document.getElementById('label-dark').classList.toggle('active', darkMode);
+            // Update lightbox if open
+            if (document.getElementById('lightbox').classList.contains('active')) {
+                updateLightbox();
+            }
+        }
+        
+        function openLightbox(card) {
+            const images = getVisibleImages();
+            const cls = darkMode ? 'img-dark' : 'img-light';
+            const clickedImg = card.querySelector('img.' + cls);
+            currentIndex = images.indexOf(clickedImg);
+            updateLightbox();
             document.getElementById('lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
         }
+        
         function closeLightbox() {
             document.getElementById('lightbox').classList.remove('active');
+            document.body.style.overflow = '';
         }
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+        
+        function navigate(dir) {
+            const images = getVisibleImages();
+            currentIndex = (currentIndex + dir + images.length) % images.length;
+            updateLightbox();
+        }
+        
+        function updateLightbox() {
+            const images = getVisibleImages();
+            if (images[currentIndex]) {
+                document.getElementById('lightbox-img').src = images[currentIndex].src;
+                document.getElementById('lightbox-caption').textContent = images[currentIndex].alt;
+            }
+        }
+
+        // Highlight active sidebar link on scroll
+        const sections = document.querySelectorAll('.capture-section');
+        const navLinks = document.querySelectorAll('.sidebar-nav a');
+        
+        function updateActiveNav() {
+            let current = '';
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 100) {
+                    current = section.id;
+                }
+            });
+            navLinks.forEach(link => {
+                link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+            });
+        }
+        
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav();
+        
+        document.addEventListener('keydown', (e) => {
+            if (!document.getElementById('lightbox').classList.contains('active')) return;
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowLeft') navigate(-1);
+            if (e.key === 'ArrowRight') navigate(1);
+        });
+        
+        document.getElementById('lightbox').addEventListener('click', (e) => {
+            if (e.target.id === 'lightbox') closeLightbox();
+        });
+
+        // Close mobile sidebar when a nav link is clicked
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', () => {
+                document.querySelector('.sidebar').classList.remove('open');
+            });
+        });
     </script>
 </body>
 </html>
 HTMLEND
-}
 
+    echo -e "  ${GREEN}✓${NC} HTML viewer generated"
+}
 # ============================================================
 # Command: test
 # ============================================================
