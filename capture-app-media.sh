@@ -4,7 +4,9 @@ set -e
 # capture-app-media.sh - Capture screenshots and video of the app for UI/UX review
 #
 # Usage:
-#   ./capture-app-media.sh              # Capture with default settings
+#   ./capture-app-media.sh              # Capture with emulator (default)
+#   ./capture-app-media.sh --device     # Capture from connected physical device
+#   ./capture-app-media.sh --serial <id> # Use specific device/emulator
 #   ./capture-app-media.sh --gui        # Show emulator window while capturing
 #   ./capture-app-media.sh --no-video   # Screenshots only (faster)
 #   ./capture-app-media.sh --skip-build # Skip APK build (use existing)
@@ -31,10 +33,20 @@ CAPTURE_VIDEO=true
 SKIP_BUILD=false
 BOOT_TIMEOUT=120
 EMULATOR_STARTED_BY_US=false
+PREFER_DEVICE=false
+TARGET_SERIAL=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --device)
+            PREFER_DEVICE=true
+            shift
+            ;;
+        --serial)
+            TARGET_SERIAL="$2"
+            shift 2
+            ;;
         --gui)
             HEADLESS=false
             shift
@@ -57,6 +69,8 @@ while [[ $# -gt 0 ]]; do
             echo "Capture screenshots and video of the app for UI/UX review."
             echo ""
             echo "Options:"
+            echo "  --device      Use connected physical device instead of emulator"
+            echo "  --serial <id> Use specific device/emulator serial"
             echo "  --gui         Show emulator window (default: headless)"
             echo "  --no-video    Skip video recording (screenshots only)"
             echo "  --skip-build  Skip APK build/install (use existing APKs)"
@@ -64,6 +78,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --help, -h    Show this help message"
             echo ""
             echo "Output is saved to: ./captures/<timestamp>/"
+            echo ""
+            echo "Examples:"
+            echo "  $0 --device              # Capture from your phone"
+            echo "  $0 --device --no-video   # Phone screenshots only"
+            echo "  $0                       # Use emulator"
             exit 0
             ;;
         *)
@@ -115,68 +134,111 @@ echo ""
 # Check prerequisites
 echo "Checking prerequisites..."
 
-if [ ! -f "android/app/src/main/jniLibs/x86_64/libdict_core.so" ]; then
+# Check for native libraries (we need at least one architecture)
+if [ ! -d "android/app/src/main/jniLibs" ] || [ -z "$(ls -A android/app/src/main/jniLibs 2>/dev/null)" ]; then
     echo -e "${RED}ERROR: Native libraries not found${NC}"
     echo "Run ./build-android-native.sh first"
     exit 1
 fi
 echo -e "  ${GREEN}✓${NC} Native libraries found"
 
-# Check AVD
-if ! "$EMULATOR" -list-avds 2>/dev/null | grep -q "^${AVD_NAME}$"; then
-    echo -e "${RED}ERROR: AVD '$AVD_NAME' not found${NC}"
-    "$EMULATOR" -list-avds 2>/dev/null | sed 's/^/  /'
-    exit 1
-fi
-echo -e "  ${GREEN}✓${NC} AVD '$AVD_NAME' exists"
+# Device detection functions
+get_physical_devices() {
+    "$ADB" devices 2>/dev/null | grep -v "emulator-" | grep -E "^\S+\s+device$" | cut -f1
+}
 
-# Check/start emulator
 get_emulator_serial() {
-    "$ADB" devices 2>/dev/null | grep "emulator-" | head -1 | cut -f1
+    "$ADB" devices 2>/dev/null | grep "emulator-" | grep -E "\s+device$" | head -1 | cut -f1
 }
 
 emulator_running() {
     [ -n "$(get_emulator_serial)" ]
 }
 
-if emulator_running; then
-    echo -e "  ${GREEN}✓${NC} Emulator already running"
-else
-    echo -e "  ${YELLOW}→${NC} Starting emulator..."
-    EMULATOR_STARTED_BY_US=true
-    
-    EMU_ARGS="-avd $AVD_NAME -no-snapshot-save"
-    if [ "$HEADLESS" = true ]; then
-        EMU_ARGS="$EMU_ARGS -no-window -no-audio -gpu swiftshader_indirect"
+# Determine which device to use
+SELECTED_SERIAL=""
+USE_EMULATOR=true
+
+if [ -n "$TARGET_SERIAL" ]; then
+    # User specified a serial
+    echo "Using specified serial: $TARGET_SERIAL"
+    SELECTED_SERIAL="$TARGET_SERIAL"
+    if [[ "$TARGET_SERIAL" == emulator-* ]]; then
+        USE_EMULATOR=true
+    else
+        USE_EMULATOR=false
     fi
-    
-    "$EMULATOR" $EMU_ARGS &>/dev/null &
-    
-    # Wait for any emulator to appear
-    echo "  Waiting for emulator to start..."
-    for i in $(seq 1 $BOOT_TIMEOUT); do
-        if emulator_running; then
-            break
-        fi
-        sleep 1
-    done
-    
-    if ! emulator_running; then
-        echo -e "${RED}ERROR: Emulator failed to start${NC}"
+elif [ "$PREFER_DEVICE" = true ]; then
+    # Look for physical device first
+    DEVICES=$(get_physical_devices)
+    if [ -n "$DEVICES" ]; then
+        SELECTED_SERIAL=$(echo "$DEVICES" | head -1)
+        USE_EMULATOR=false
+        echo -e "  ${GREEN}✓${NC} Found physical device: $SELECTED_SERIAL"
+    else
+        echo -e "${RED}ERROR: --device specified but no physical device found${NC}"
+        echo ""
+        echo "Connect a device with USB debugging enabled, then retry."
+        echo "Current devices:"
+        "$ADB" devices -l
         exit 1
     fi
 fi
 
-# Get emulator serial for targeted commands
-EMU_SERIAL=$(get_emulator_serial)
-if [ -z "$EMU_SERIAL" ]; then
-    echo -e "${RED}ERROR: No emulator found${NC}"
+# If no device selected yet, use/start emulator
+if [ -z "$SELECTED_SERIAL" ]; then
+    # Check AVD exists (only needed for emulator)
+    if ! "$EMULATOR" -list-avds 2>/dev/null | grep -q "^${AVD_NAME}$"; then
+        echo -e "${RED}ERROR: AVD '$AVD_NAME' not found${NC}"
+        "$EMULATOR" -list-avds 2>/dev/null | sed 's/^/  /'
+        exit 1
+    fi
+    echo -e "  ${GREEN}✓${NC} AVD '$AVD_NAME' exists"
+
+    if emulator_running; then
+        SELECTED_SERIAL=$(get_emulator_serial)
+        echo -e "  ${GREEN}✓${NC} Emulator already running: $SELECTED_SERIAL"
+    else
+        echo -e "  ${YELLOW}→${NC} Starting emulator..."
+        EMULATOR_STARTED_BY_US=true
+        
+        EMU_ARGS="-avd $AVD_NAME -no-snapshot-save"
+        if [ "$HEADLESS" = true ]; then
+            EMU_ARGS="$EMU_ARGS -no-window -no-audio -gpu swiftshader_indirect"
+        fi
+        
+        "$EMULATOR" $EMU_ARGS &>/dev/null &
+        
+        # Wait for any emulator to appear
+        echo "  Waiting for emulator to start..."
+        for i in $(seq 1 $BOOT_TIMEOUT); do
+            if emulator_running; then
+                break
+            fi
+            sleep 1
+        done
+        
+        if ! emulator_running; then
+            echo -e "${RED}ERROR: Emulator failed to start${NC}"
+            exit 1
+        fi
+        SELECTED_SERIAL=$(get_emulator_serial)
+    fi
+fi
+
+if [ -z "$SELECTED_SERIAL" ]; then
+    echo -e "${RED}ERROR: No device or emulator available${NC}"
     exit 1
 fi
-echo -e "  ${GREEN}✓${NC} Using emulator: $EMU_SERIAL"
 
-# Create adb command that targets the emulator (works in subshells too)
-ADB_EMU="$ADB -s $EMU_SERIAL"
+# Set device serial and get info
+export ANDROID_SERIAL="$SELECTED_SERIAL"
+ADB_EMU="$ADB -s $SELECTED_SERIAL"
+
+DEVICE_MODEL=$($ADB_EMU shell getprop ro.product.model 2>/dev/null | tr -d '\r' || echo "unknown")
+DEVICE_ABI=$($ADB_EMU shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r' || echo "unknown")
+echo -e "  ${GREEN}✓${NC} Using device: $SELECTED_SERIAL"
+echo -e "  ${BLUE}ℹ${NC} Model: $DEVICE_MODEL (ABI: $DEVICE_ABI)"
 
 # Wait for boot to complete
 echo "  Waiting for boot..."
@@ -385,6 +447,12 @@ generate_html_viewer() {
     local has_video="false"
     [ -f "$OUTPUT_DIR/app-flow.mp4" ] && has_video="true"
     
+    # Get device info for display
+    local device_html=""
+    if [ -n "$DEVICE_MODEL" ] && [ "$DEVICE_MODEL" != "unknown" ]; then
+        device_html="<div class=\"device\">$DEVICE_MODEL</div>"
+    fi
+    
     # Get git commit info
     local commit_hash=""
     local commit_html=""
@@ -529,6 +597,11 @@ generate_html_viewer() {
             text-decoration: none;
         }
         .sidebar-header .commit a:hover { text-decoration: underline; }
+        .sidebar-header .device {
+            color: #6a9fb5;
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+        }
 
         /* Theme toggle in sidebar */
         .theme-toggle {
@@ -750,6 +823,7 @@ generate_html_viewer() {
         <div class="sidebar-header">
             <h1>Dict App</h1>
             <div class="timestamp">$display_ts</div>
+            $device_html
             $commit_html
         </div>
 HTMLHEAD

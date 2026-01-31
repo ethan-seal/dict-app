@@ -13,6 +13,53 @@ Architecture details in `ARCHITECTURE.md`.
 
 ---
 
+## Testing on Physical Devices
+
+When debugging device-specific issues (especially arm64 vs x86_64), you can run tests directly on a user's connected phone:
+
+### Setup
+1. Ask user to connect phone via USB
+2. Ask user to enable USB debugging (Settings → Developer Options → USB Debugging)
+3. Ask user to approve the authorization popup on their phone
+4. Verify connection: `adb devices` should show device as "device" not "unauthorized"
+
+### Running Tests on Device
+```bash
+# Run all tests on connected physical device
+./run-android-tests.sh --device
+
+# Run specific diagnostic tests
+adb shell am instrument -w -e class org.example.dictapp.DeviceDiagnosticTest \
+  org.example.dictapp.test/androidx.test.runner.AndroidJUnitRunner
+
+# Collect logs
+adb logcat -d -s DeviceDiagnostic:D DictCore:D DictViewModel:D
+```
+
+### Useful ADB Commands
+```bash
+adb devices -l                    # List devices with details
+adb install -r app.apk            # Install/reinstall APK
+adb logcat -c                     # Clear logs
+adb logcat -d                     # Dump logs
+adb shell pm uninstall <package>  # Uninstall app
+adb shell getprop ro.product.cpu.abi  # Check device architecture
+```
+
+### 16KB Page Size (Android 15+)
+Devices running Android 15+ (SDK 35+) with arm64 may require 16KB page-aligned native libraries. Check with:
+```bash
+# Verify APK alignment
+$ANDROID_SDK/build-tools/34.0.0/zipalign -c -v 4 app.apk | grep "\.so"
+```
+
+If alignment issues occur:
+1. Ensure AGP 8.5+ in `android/build.gradle.kts`
+2. Add to `core/.cargo/config.toml`: `rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]`
+3. Set `jniLibs.useLegacyPackaging = false` in app's `build.gradle.kts`
+
+---
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
