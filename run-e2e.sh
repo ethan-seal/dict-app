@@ -715,12 +715,12 @@ generate_html_viewer() {
     fi
     
     # Format timestamp for display (e.g., "Jan 21, 2026 at 1:32 PM")
-    # TIMESTAMP format: YYYYMMDD_HHMMSS
-    local year=${TIMESTAMP:0:4}
-    local month=${TIMESTAMP:4:2}
-    local day=${TIMESTAMP:6:2}
-    local hour=${TIMESTAMP:9:2}
-    local min=${TIMESTAMP:11:2}
+    # timestamp format: YYYYMMDD_HHMMSS
+    local year=${timestamp:0:4}
+    local month=${timestamp:4:2}
+    local day=${timestamp:6:2}
+    local hour=${timestamp:9:2}
+    local min=${timestamp:11:2}
     
     # Convert month number to name
     local month_name
