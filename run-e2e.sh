@@ -1116,10 +1116,19 @@ HTMLCARD
             local label=$(echo "$fname" | sed 's/^outlier_[0-9]*[a-z]*_//;s/^[0-9]*[a-z]*_//;s/_/ /g')
 
             case "$fname" in
-                01_*|02_*|04_*|05_*|07_*)
+                # Main flow - Search section
+                01_*|02_*|05_*|06_*|10_*)
                     search_files+=("$filename|$label") ;;
-                03_*|03b_*|06_*|06b_*|06c_*)
+                # Main flow - Definition view section
+                03_*|04b_*|07_*|08b_*|09c_*)
                     definition_files+=("$filename|$label") ;;
+                # Edge cases - Long content (etymology, definitions)
+                outlier_11*|outlier_12*|outlier_16*)
+                    edge_long_files+=("$filename|$label") ;;
+                # Edge cases - Many items (many definitions with scroll)
+                outlier_13*|outlier_14*|outlier_15*)
+                    edge_many_files+=("$filename|$label") ;;
+                # Legacy patterns for backward compatibility
                 outlier_01*|outlier_03*|outlier_04*)
                     edge_long_files+=("$filename|$label") ;;
                 outlier_02*)
