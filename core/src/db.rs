@@ -124,6 +124,22 @@ pub fn init_database(db_path: &str) -> Result<DictHandle> {
 pub fn open_readonly(db_path: &str) -> Result<DictHandle> {
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
+    // Log database stats on open (useful for diagnostics)
+    if log::log_enabled!(log::Level::Info) {
+        let word_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM words", [], |row| row.get(0))
+            .unwrap_or(-1);
+        let def_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM definitions", [], |row| row.get(0))
+            .unwrap_or(-1);
+        log::info!(
+            "Opened database '{}': {} words, {} definitions",
+            db_path,
+            word_count,
+            def_count
+        );
+    }
+
     Ok(DictHandle {
         conn: Arc::new(conn),
     })
@@ -132,18 +148,44 @@ pub fn open_readonly(db_path: &str) -> Result<DictHandle> {
 /// Get the full definition for a word by ID
 pub fn get_full_definition(handle: &DictHandle, word_id: i64) -> Result<Option<FullDefinition>> {
     // Get basic word info
-    let mut stmt = handle
-        .conn
-        .prepare("SELECT word, pos, language, lang_code FROM words WHERE id = ?")?;
+    // Note: lang_code may not exist in older database schemas, so we handle both cases
 
-    let word_row = stmt.query_row(params![word_id], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
-        ))
-    });
+    // Check if lang_code column exists (cached per connection would be better, but this works)
+    let has_lang_code = handle
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('words') WHERE name='lang_code'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    let word_row = if has_lang_code {
+        let mut stmt = handle
+            .conn
+            .prepare("SELECT word, pos, language, lang_code FROM words WHERE id = ?")?;
+        stmt.query_row(params![word_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+    } else {
+        let mut stmt = handle
+            .conn
+            .prepare("SELECT word, pos, language FROM words WHERE id = ?")?;
+        stmt.query_row(params![word_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                String::new(), // Default empty lang_code for older schemas
+            ))
+        })
+    };
 
     let (word, pos, language, lang_code) = match word_row {
         Ok(row) => row,

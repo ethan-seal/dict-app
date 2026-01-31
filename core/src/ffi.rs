@@ -264,22 +264,45 @@ mod android {
             Err(_) => return ptr::null_mut(),
         };
 
+        log::debug!(
+            "JNI search: query='{}', limit={}, offset={}",
+            query_str,
+            limit,
+            offset
+        );
+
         let guard = HANDLE.lock().unwrap();
         let handle = match guard.as_ref() {
             Some(h) => h,
-            None => return ptr::null_mut(),
+            None => {
+                log::warn!("JNI search: handle not initialized");
+                return ptr::null_mut();
+            }
         };
 
         let results = search_with_offset(handle, &query_str, limit as u32, offset as u32);
 
+        log::debug!(
+            "JNI search: query='{}' returned {} results, first IDs: {:?}",
+            query_str,
+            results.len(),
+            results.iter().take(3).map(|r| r.id).collect::<Vec<_>>()
+        );
+
         let json = match serde_json::to_string(&results) {
             Ok(j) => j,
-            Err(_) => return ptr::null_mut(),
+            Err(e) => {
+                log::error!("JNI search: JSON serialization failed: {}", e);
+                return ptr::null_mut();
+            }
         };
 
         match env.new_string(&json) {
             Ok(s) => s.into_raw(),
-            Err(_) => ptr::null_mut(),
+            Err(e) => {
+                log::error!("JNI search: failed to create Java string: {:?}", e);
+                ptr::null_mut()
+            }
         }
     }
 
@@ -292,22 +315,43 @@ mod android {
         _class: JClass,
         word_id: jlong,
     ) -> jstring {
+        log::debug!("JNI getDefinition: called with word_id={}", word_id);
+
         let guard = HANDLE.lock().unwrap();
         let handle = match guard.as_ref() {
             Some(h) => h,
-            None => return ptr::null_mut(),
+            None => {
+                log::warn!("JNI getDefinition: handle not initialized");
+                return ptr::null_mut();
+            }
         };
 
         let definition = get_definition(handle, word_id);
 
+        log::debug!(
+            "JNI getDefinition: word_id={} -> {}",
+            word_id,
+            if definition.is_some() {
+                "found"
+            } else {
+                "not found"
+            }
+        );
+
         let json = match serde_json::to_string(&definition) {
             Ok(j) => j,
-            Err(_) => return ptr::null_mut(),
+            Err(e) => {
+                log::error!("JNI getDefinition: JSON serialization failed: {}", e);
+                return ptr::null_mut();
+            }
         };
 
         match env.new_string(&json) {
             Ok(s) => s.into_raw(),
-            Err(_) => ptr::null_mut(),
+            Err(e) => {
+                log::error!("JNI getDefinition: failed to create Java string: {:?}", e);
+                ptr::null_mut()
+            }
         }
     }
 

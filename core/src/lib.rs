@@ -167,7 +167,17 @@ pub fn search_with_offset(
 /// }
 /// ```
 pub fn get_definition(handle: &DictHandle, word_id: i64) -> Option<FullDefinition> {
-    db::get_full_definition(handle, word_id).ok().flatten()
+    match db::get_full_definition(handle, word_id) {
+        Ok(def) => def,
+        Err(e) => {
+            log::error!(
+                "get_definition: error fetching word_id={}: {:?}",
+                word_id,
+                e
+            );
+            None
+        }
+    }
 }
 
 /// Import JSONL data into the dictionary database
