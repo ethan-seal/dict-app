@@ -60,6 +60,65 @@ If alignment issues occur:
 
 ---
 
+## E2E Testing and Automation
+
+The `run-e2e.sh` script provides a unified interface for building, testing, and capturing screenshots/videos on both physical devices and emulators.
+
+### Quick Start
+```bash
+# Build everything
+./run-e2e.sh build
+
+# Install on device
+./run-e2e.sh install --target device
+
+# Capture screenshots
+./run-e2e.sh capture --target device
+
+# Collect logs
+./run-e2e.sh logs --target device --filter "DictCore:D DictViewModel:D *:S"
+
+# Run tests
+./run-e2e.sh test --target device --class DeviceDiagnosticTest
+```
+
+### Available Commands
+- **build** - Build native libraries and APKs
+- **install** - Install app and test APKs on target
+- **logs** - Collect logcat output with optional filters
+- **capture** - Automated screenshot and video capture
+- **test** - Run instrumentation tests
+- **clean** - Clean all build artifacts
+
+### Common Workflows
+
+**Full rebuild and test on device:**
+```bash
+./run-e2e.sh clean
+./run-e2e.sh build
+./run-e2e.sh install --target device
+./run-e2e.sh test --target device
+```
+
+**Quick screenshot capture:**
+```bash
+./run-e2e.sh capture --target emulator --no-video --skip-dark
+```
+
+**Debug specific issue:**
+```bash
+# Clear logs, reproduce issue, then collect
+./run-e2e.sh logs --target device --clear
+# ... reproduce issue ...
+./run-e2e.sh logs --target device --filter "DictCore:D *:S"
+```
+
+Run `./run-e2e.sh --help` for full documentation.
+
+**Note:** Old capture scripts (`capture-app-media.sh`, `capture-device-auto.sh`) are deprecated and redirect to `run-e2e.sh`.
+
+---
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
