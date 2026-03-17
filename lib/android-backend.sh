@@ -255,6 +255,11 @@ backend_restart_app() {
     backend_open_app "$@"
 }
 
+# Max screenshot dimension (longest side) for API compatibility.
+# Anthropic recommends max 1568px; images above this are auto-resized
+# by the API but waste bandwidth. Set to 0 to disable resizing.
+BACKEND_SCREENSHOT_MAX_DIM=${BACKEND_SCREENSHOT_MAX_DIM:-1568}
+
 # Take screenshot
 # Usage: backend_screenshot "name" "/path/to/output.png"
 backend_screenshot() {
@@ -266,6 +271,48 @@ backend_screenshot() {
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell screencap -p "$tmp"
     $BACKEND_ADB -s "$BACKEND_SERIAL" pull "$tmp" "$output" 2>/dev/null
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell rm -f "$tmp"
+    
+    # Resize if needed for API compatibility
+    if [ "$BACKEND_SCREENSHOT_MAX_DIM" -gt 0 ] 2>/dev/null && [ -f "$output" ]; then
+        backend_resize_image "$output" "$BACKEND_SCREENSHOT_MAX_DIM"
+    fi
+}
+
+# Resize an image so its longest side is at most max_dim pixels.
+# Tries ImageMagick, then Python/Pillow, then ffmpeg; warns once if none available.
+# Usage: backend_resize_image "/path/to/image.png" <max_dim>
+backend_resize_image() {
+    local img="$1"
+    local max_dim="$2"
+    
+    if command -v magick >/dev/null 2>&1; then
+        magick "$img" -resize "${max_dim}x${max_dim}>" "$img"
+    elif command -v convert >/dev/null 2>&1; then
+        convert "$img" -resize "${max_dim}x${max_dim}>" "$img"
+    elif command -v python3 >/dev/null 2>&1 && python3 -c "from PIL import Image" 2>/dev/null; then
+        python3 -c "
+from PIL import Image
+img = Image.open('$img')
+w, h = img.size
+longest = max(w, h)
+if longest > $max_dim:
+    scale = $max_dim / longest
+    new_size = (int(w * scale), int(h * scale))
+    img = img.resize(new_size, Image.LANCZOS)
+    img.save('$img', optimize=True, compress_level=9)
+" 2>/dev/null
+    elif command -v ffmpeg >/dev/null 2>&1; then
+        local tmp_out="${img%.png}_resized.png"
+        ffmpeg -loglevel error -i "$img" \
+            -vf "scale='min($max_dim,iw)':'min($max_dim,ih)':force_original_aspect_ratio=decrease" \
+            -y "$tmp_out" 2>/dev/null && mv "$tmp_out" "$img"
+    else
+        # Warn once per session
+        if [ -z "$_BACKEND_RESIZE_WARNED" ]; then
+            echo "  (install ImageMagick or Pillow for automatic screenshot resizing)" >&2
+            _BACKEND_RESIZE_WARNED=1
+        fi
+    fi
 }
 
 # Find element by UI Automator and tap it
