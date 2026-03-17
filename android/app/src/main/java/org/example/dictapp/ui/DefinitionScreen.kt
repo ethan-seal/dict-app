@@ -88,9 +88,10 @@ fun DefinitionScreen(
                 actions = {
                     when (val state = definitionState) {
                         is DefinitionState.Success -> {
-                            if (state.definition.langCode.isNotEmpty()) {
+                            val displayLangCode = state.definition.langCode?.uppercase().orEmpty()
+                            if (displayLangCode.isNotEmpty()) {
                                 Text(
-                                    text = state.definition.langCode,
+                                    text = displayLangCode,
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                     modifier = Modifier.padding(end = 16.dp)

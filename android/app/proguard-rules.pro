@@ -8,12 +8,9 @@
 # Keep JNI bindings
 -keep class org.example.dictapp.DictCore { *; }
 
-# Keep data classes used for JSON deserialization
--keep class org.example.dictapp.SearchResult { *; }
--keep class org.example.dictapp.FullDefinition { *; }
--keep class org.example.dictapp.Definition { *; }
--keep class org.example.dictapp.Pronunciation { *; }
--keep class org.example.dictapp.Translation { *; }
+# Data classes (SearchResult, FullDefinition, etc.) do NOT need -keep rules.
+# They use kotlinx.serialization which generates serializers at compile time,
+# so R8 can freely obfuscate field names without breaking deserialization.
 
 # Keep zstd-jni classes (fields accessed via JNI from native code)
 -keep class com.github.luben.zstd.** { *; }
@@ -21,15 +18,18 @@
 # Keep Apache Commons Compress zstd wrapper
 -keep class org.apache.commons.compress.compressors.zstandard.** { *; }
 
-# Keep Gson serialization
--keepattributes Signature
--keepattributes *Annotation*
--dontwarn sun.misc.**
--keep class com.google.gson.** { *; }
--keep class * extends com.google.gson.reflect.TypeToken
--keep class * implements com.google.gson.TypeAdapterFactory
--keep class * implements com.google.gson.JsonSerializer
--keep class * implements com.google.gson.JsonDeserializer
+# kotlinx.serialization - keep the serializer lookup infrastructure
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.**
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keepclassmembers @kotlinx.serialization.Serializable class org.example.dictapp.** {
+    *** Companion;
+    *** serializer(...);
+    kotlinx.serialization.KSerializer $$serializer(...);
+}
 
 # Uncomment this to preserve the line number information for
 # debugging stack traces.

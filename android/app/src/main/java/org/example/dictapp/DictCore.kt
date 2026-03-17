@@ -1,9 +1,9 @@
 package org.example.dictapp
 
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * JNI bindings to the Rust dict-core library.
@@ -36,9 +36,7 @@ object DictCore {
     const val ERROR_SEARCH_FAILED = 5
     const val ERROR_JSON_FAILED = 6
 
-    private val gson = Gson()
-
-    private val SEARCH_RESULT_LIST_TYPE = object : TypeToken<List<SearchResult>>() {}.type
+    private val json = Json { ignoreUnknownKeys = true }
 
     init {
         System.loadLibrary("dict_core")
@@ -84,17 +82,17 @@ object DictCore {
      * @return List of SearchResult objects
      */
     fun searchParsed(query: String, limit: Int = 50, offset: Int = 0): List<SearchResult> {
-        val json = search(query, limit, offset)
-        if (json == null) {
+        val jsonStr = search(query, limit, offset)
+        if (jsonStr == null) {
             Log.w(TAG, "searchParsed('$query'): native returned null")
             return emptyList()
         }
         return try {
-            val results: List<SearchResult> = gson.fromJson(json, SEARCH_RESULT_LIST_TYPE)
+            val results = json.decodeFromString<List<SearchResult>>(jsonStr)
             Log.d(TAG, "searchParsed('$query'): got ${results.size} results")
             results
         } catch (e: Exception) {
-            Log.e(TAG, "searchParsed('$query'): Gson parse failed", e)
+            Log.e(TAG, "searchParsed('$query'): parse failed", e)
             emptyList()
         }
     }
@@ -106,21 +104,18 @@ object DictCore {
      * @return FullDefinition object, or null if not found
      */
     fun getDefinitionParsed(wordId: Long): FullDefinition? {
-        val json = getDefinition(wordId)
-        if (json == null) {
+        val jsonStr = getDefinition(wordId)
+        if (jsonStr == null) {
             Log.w(TAG, "getDefinitionParsed($wordId): native returned null")
             return null
         }
-        Log.d(TAG, "getDefinitionParsed($wordId): got JSON length=${json.length}")
+        Log.d(TAG, "getDefinitionParsed($wordId): got JSON length=${jsonStr.length}")
         return try {
-            val result = gson.fromJson(json, FullDefinition::class.java)
-            if (result == null) {
-                Log.w(TAG, "getDefinitionParsed($wordId): Gson returned null (JSON was 'null'?)")
-            }
+            val result = json.decodeFromString<FullDefinition>(jsonStr)
             result
         } catch (e: Exception) {
-            Log.e(TAG, "getDefinitionParsed($wordId): Gson parse failed", e)
-            Log.e(TAG, "getDefinitionParsed($wordId): JSON preview: ${json.take(500)}")
+            Log.e(TAG, "getDefinitionParsed($wordId): parse failed", e)
+            Log.e(TAG, "getDefinitionParsed($wordId): JSON preview: ${jsonStr.take(500)}")
             null
         }
     }
@@ -131,6 +126,7 @@ object DictCore {
 /**
  * Search result entry for display in results list.
  */
+@Serializable
 data class SearchResult(
     val id: Long,
     val word: String,
@@ -142,23 +138,22 @@ data class SearchResult(
 /**
  * Complete definition with all word information.
  */
+@Serializable
 data class FullDefinition(
     val word: String,
     val pos: String,
     val language: String,
-    val lang_code: String? = null,
+    @SerialName("lang_code") val langCode: String? = null,
     val definitions: List<Definition>,
     val pronunciations: List<Pronunciation>,
     val etymology: String?,
     val translations: List<Translation>
-) {
-    /** Language code uppercased (e.g. "EN") */
-    val langCode: String get() = lang_code?.uppercase().orEmpty()
-}
+)
 
 /**
  * A single definition/meaning.
  */
+@Serializable
 data class Definition(
     val id: Long,
     val text: String,
@@ -169,18 +164,20 @@ data class Definition(
 /**
  * Pronunciation information.
  */
+@Serializable
 data class Pronunciation(
     val id: Long,
     val ipa: String?,
-    @SerializedName("audio_url") val audioUrl: String?,
+    @SerialName("audio_url") val audioUrl: String?,
     val accent: String?
 )
 
 /**
  * Translation to another language.
  */
+@Serializable
 data class Translation(
     val id: Long,
-    @SerializedName("target_language") val targetLanguage: String,
+    @SerialName("target_language") val targetLanguage: String,
     val translation: String
 )

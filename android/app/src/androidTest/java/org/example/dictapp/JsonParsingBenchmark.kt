@@ -5,8 +5,7 @@ import androidx.benchmark.junit4.BenchmarkRule
 import androidx.benchmark.junit4.measureRepeated
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -18,7 +17,7 @@ import java.io.FileOutputStream
 /**
  * Benchmarks to measure JSON parsing overhead in the Kotlin layer.
  *
- * These tests isolate the Gson parsing cost from JNI overhead,
+ * These tests isolate the kotlinx.serialization parsing cost from JNI overhead,
  * helping identify if JSON serialization is a bottleneck.
  *
  * Run with: ./gradlew :app:connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.example.dictapp.JsonParsingBenchmark
@@ -31,7 +30,7 @@ class JsonParsingBenchmark {
 
     private lateinit var context: Context
     private lateinit var dbPath: String
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true }
 
     // Pre-captured JSON strings for parsing benchmarks
     private lateinit var searchResultJson: String
@@ -86,14 +85,12 @@ class JsonParsingBenchmark {
     /**
      * Benchmark: Parse search results JSON (isolated)
      *
-     * Measures only Gson parsing time, without JNI overhead.
+     * Measures only kotlinx.serialization parsing time, without JNI overhead.
      */
     @Test
     fun jsonParsing_searchResults() {
-        val type = object : TypeToken<List<SearchResult>>() {}.type
-
         benchmarkRule.measureRepeated {
-            val results: List<SearchResult> = gson.fromJson(searchResultJson, type)
+            val results = json.decodeFromString<List<SearchResult>>(searchResultJson)
             check(results.isNotEmpty())
         }
     }
@@ -104,10 +101,9 @@ class JsonParsingBenchmark {
     @Test
     fun jsonParsing_searchResultsEmpty() {
         val emptyJson = "[]"
-        val type = object : TypeToken<List<SearchResult>>() {}.type
 
         benchmarkRule.measureRepeated {
-            val results: List<SearchResult> = gson.fromJson(emptyJson, type)
+            val results = json.decodeFromString<List<SearchResult>>(emptyJson)
             check(results.isEmpty())
         }
     }
@@ -119,12 +115,12 @@ class JsonParsingBenchmark {
     /**
      * Benchmark: Parse full definition JSON (isolated)
      *
-     * Measures only Gson parsing time for complex nested object.
+     * Measures only kotlinx.serialization parsing time for complex nested object.
      */
     @Test
     fun jsonParsing_definition() {
         benchmarkRule.measureRepeated {
-            val definition = gson.fromJson(definitionJson, FullDefinition::class.java)
+            val definition = json.decodeFromString<FullDefinition>(definitionJson)
             check(definition != null)
         }
     }
@@ -205,10 +201,9 @@ class JsonParsingBenchmark {
             }
             append("]")
         }
-        val type = object : TypeToken<List<SearchResult>>() {}.type
 
         benchmarkRule.measureRepeated {
-            val results: List<SearchResult> = gson.fromJson(largeJson, type)
+            val results = json.decodeFromString<List<SearchResult>>(largeJson)
             check(results.size == 100)
         }
     }
@@ -217,31 +212,33 @@ class JsonParsingBenchmark {
      * Benchmark: Parse complex definition with many entries
      *
      * Synthetic test with complex nested structure.
+     * JSON keys use snake_case to match Rust serialization format.
      */
     @Test
     fun jsonParsing_complexDefinition() {
-        // Generate synthetic complex definition JSON
+        // Generate synthetic complex definition JSON (snake_case keys match Rust output)
         val complexJson = """
         {
             "word": "test",
             "pos": "noun",
             "language": "English",
+            "lang_code": "en",
             "definitions": [
                 ${(1..10).joinToString(",") { """{"id":$it,"text":"Definition $it","examples":["Example 1","Example 2"],"tags":["formal","dated"]}""" }}
             ],
             "pronunciations": [
-                {"id":1,"ipa":"/test/","audioUrl":"https://example.com/test.ogg","accent":"US"},
-                {"id":2,"ipa":"/test/","audioUrl":null,"accent":"UK"}
+                {"id":1,"ipa":"/test/","audio_url":"https://example.com/test.ogg","accent":"US"},
+                {"id":2,"ipa":"/test/","audio_url":null,"accent":"UK"}
             ],
             "etymology": "From Latin testum, meaning earthen pot",
             "translations": [
-                ${(1..20).joinToString(",") { """{"id":$it,"targetLanguage":"lang$it","translation":"translation$it"}""" }}
+                ${(1..20).joinToString(",") { """{"id":$it,"target_language":"lang$it","translation":"translation$it"}""" }}
             ]
         }
         """.trimIndent()
 
         benchmarkRule.measureRepeated {
-            val definition = gson.fromJson(complexJson, FullDefinition::class.java)
+            val definition = json.decodeFromString<FullDefinition>(complexJson)
             check(definition != null)
             check(definition.definitions.size == 10)
             check(definition.translations.size == 20)

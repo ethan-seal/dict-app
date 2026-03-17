@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 // Load keystore properties for signing (if available)
@@ -135,8 +136,8 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // JSON parsing for JNI results
-    implementation("com.google.code.gson:gson:2.10.1")
+    // JSON parsing for JNI results (compile-time codegen, no reflection, no ProGuard rules needed)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
     // Networking for database download
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
