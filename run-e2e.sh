@@ -4,7 +4,11 @@ set -e
 # run-e2e.sh - End-to-end testing and capture script for Android app
 #
 # Usage:
-#   ./run-e2e.sh <command> --target device|emulator [OPTIONS]
+#   ./run-e2e.sh <command> --target device|emulator [--release] [OPTIONS]
+#
+# Two orthogonal dimensions:
+#   Build type: debug (default) or --release (R8/ProGuard minification)
+#   Target:     --target device or --target emulator
 #
 # Commands:
 #   build     Build native libraries and APKs
@@ -15,10 +19,10 @@ set -e
 #   clean     Clean build artifacts
 #
 # Examples:
-#   ./run-e2e.sh build --target emulator
-#   ./run-e2e.sh install --target device
-#   ./run-e2e.sh capture --target emulator --no-video
-#   ./run-e2e.sh test --target device --class DeviceDiagnosticTest
+#   ./run-e2e.sh build                               # debug build
+#   ./run-e2e.sh build --release                     # release build (R8)
+#   ./run-e2e.sh capture --target device --release   # release screenshots
+#   ./run-e2e.sh test --target device --release      # test release build
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -41,6 +45,7 @@ SKIP_BUILD=false
 CAPTURE_VIDEO=true
 SKIP_DARK=false
 TEST_CLASS=""
+BUILD_RELEASE=false
 
 # Print usage
 usage() {
@@ -56,8 +61,9 @@ Commands:
   clean       Clean build artifacts
 
 Global Options:
-  --target device|emulator    Target device type (REQUIRED)
+  --target device|emulator    Target device type (REQUIRED for most commands)
   --serial <id>              Use specific device/emulator
+  --release                  Use release build (R8/ProGuard minification)
   --help, -h                 Show this help
 
 Build Options:
@@ -81,10 +87,13 @@ Logs Options:
   --filter <tags>            Logcat filter (e.g., "DictCore:D *:S")
 
 Examples:
-  $0 build --target emulator
-  $0 install --target device --serial 46211FDJH001Q2
-  $0 capture --target emulator --no-video
+  $0 build                                         # debug build
+  $0 build --release                               # release build (R8)
+  $0 install --target device --release              # install release APK
+  $0 capture --target emulator --no-video           # debug screenshots
+  $0 capture --target device --release              # release screenshots
   $0 test --target device --class DeviceDiagnosticTest
+  $0 test --target device --release                 # test release build
   $0 logs --target device --filter "DictCore:D DictViewModel:D *:S"
 
 EOF
@@ -154,6 +163,10 @@ while [[ $# -gt 0 ]]; do
         --class)
             TEST_CLASS="$2"
             shift 2
+            ;;
+        --release)
+            BUILD_RELEASE=true
+            shift
             ;;
         --clear)
             CLEAR_LOGS=true
@@ -229,11 +242,20 @@ cmd_build() {
     
     # Build APKs
     if [ "$NATIVE_ONLY" = false ]; then
-        echo -e "${BLUE}Building APKs...${NC}"
-        cd android
-        ./gradlew assembleDebug assembleDebugAndroidTest --quiet
-        cd ..
-        echo -e "  ${GREEN}✓${NC} APKs built"
+        if [ "$BUILD_RELEASE" = true ]; then
+            echo -e "${BLUE}Building release APK + test APK...${NC}"
+            cd android
+            ./gradlew assembleRelease assembleDebugAndroidTest --quiet
+            cd ..
+            echo -e "  ${GREEN}✓${NC} Release APK built"
+            echo -e "  ${GREEN}✓${NC} Test APK built"
+        else
+            echo -e "${BLUE}Building APKs...${NC}"
+            cd android
+            ./gradlew assembleDebug assembleDebugAndroidTest --quiet
+            cd ..
+            echo -e "  ${GREEN}✓${NC} APKs built"
+        fi
         echo ""
     fi
     
@@ -261,20 +283,25 @@ cmd_install() {
     echo ""
     
     # APK paths
-    local app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    local app_apk
+    if [ "$BUILD_RELEASE" = true ]; then
+        app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+    else
+        app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    fi
     local test_apk="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
     
     # Install app
     if [ "$TEST_ONLY" = false ]; then
         if [ ! -f "$app_apk" ]; then
             echo -e "${RED}ERROR: App APK not found${NC}"
-            echo "Run: $0 build first"
+            echo "Run: $0 build $( [ "$BUILD_RELEASE" = true ] && echo "--release" ) first"
             exit 1
         fi
         
         echo -e "${BLUE}Installing app...${NC}"
         backend_install_apk "$app_apk" | grep -v "^Performing" || true
-        echo -e "  ${GREEN}✓${NC} App installed"
+        echo -e "  ${GREEN}✓${NC} App installed ($( [ "$BUILD_RELEASE" = true ] && echo "release" || echo "debug" ))"
     fi
     
     # Install test APK
@@ -373,27 +400,41 @@ cmd_capture() {
     # Build and install (unless --skip-build)
     if [ "$SKIP_BUILD" = false ]; then
         # Build
-        echo -e "${BLUE}Building APKs...${NC}"
-        cd android
-        ./gradlew assembleDebug assembleDebugAndroidTest --quiet
-        cd ..
-        echo -e "  ${GREEN}✓${NC} APKs built"
+        if [ "$BUILD_RELEASE" = true ]; then
+            echo -e "${BLUE}Building release APK (with ProGuard/R8)...${NC}"
+            cd android
+            ./gradlew assembleRelease --quiet
+            cd ..
+            echo -e "  ${GREEN}✓${NC} Release APK built"
+        else
+            echo -e "${BLUE}Building APKs...${NC}"
+            cd android
+            ./gradlew assembleDebug assembleDebugAndroidTest --quiet
+            cd ..
+            echo -e "  ${GREEN}✓${NC} APKs built"
+        fi
         echo ""
         
         # Install
-        local app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+        local app_apk
+        if [ "$BUILD_RELEASE" = true ]; then
+            app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+        else
+            app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+        fi
         local test_apk="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
         
         if [ ! -f "$app_apk" ]; then
             echo -e "${RED}ERROR: App APK not found after build${NC}"
+            echo "APK path: $app_apk"
             exit 1
         fi
         
         echo -e "${BLUE}Installing APKs...${NC}"
         backend_install_apk "$app_apk" | grep -v "^Performing" || true
-        echo -e "  ${GREEN}✓${NC} App installed"
+        echo -e "  ${GREEN}✓${NC} App installed ($( [ "$BUILD_RELEASE" = true ] && echo "release" || echo "debug" ))"
         
-        if [ -f "$test_apk" ]; then
+        if [ "$BUILD_RELEASE" = false ] && [ -f "$test_apk" ]; then
             backend_install_apk "$test_apk" | grep -v "^Performing" || true
             echo -e "  ${GREEN}✓${NC} Test APK installed"
         fi
@@ -747,7 +788,7 @@ generate_html_viewer() {
     
     # Check if dark screenshots exist
     local has_dark="false"
-    if [ -d "$light_dir_DARK" ] && ls "$light_dir_DARK"/*.png &>/dev/null; then
+    if [ -d "$dark_dir" ] && ls "$dark_dir"/*.png &>/dev/null; then
         has_dark="true"
     fi
 
@@ -761,11 +802,10 @@ generate_html_viewer() {
         for img in $(ls -1 "$light_dir"/*.png 2>/dev/null); do
             local fname=$(basename "$img" .png)
             case "$fname" in
-                01_*|02_*|04_*|05_*|07_*) has_search=true ;;
-                03_*|03b_*|06_*|06b_*|06c_*) has_definition=true ;;
-                outlier_01*|outlier_03*|outlier_04*) has_edge_long=true ;;
-                outlier_02*) has_edge_many=true ;;
-                outlier_05*|outlier_06*) has_edge_missing=true ;;
+                01_*|02_*|05_*|06_*|10_*) has_search=true ;;
+                03_*|04b_*|07_*|08b_*|09c_*) has_definition=true ;;
+                outlier_11*|outlier_12*|outlier_16*|outlier_17*) has_edge_long=true ;;
+                outlier_13*|outlier_14*|outlier_15*) has_edge_many=true ;;
             esac
         done
     fi
@@ -1090,7 +1130,7 @@ HTMLNAVEND
         local filename="$1"
         local label="$2"
         local dark_img=""
-        if [ -f "$light_dir_DARK/$filename" ]; then
+        if [ -f "$dark_dir/$filename" ]; then
             dark_img="<img class=\"img-dark\" src=\"screenshots-dark/$filename\" alt=\"$label\">"
         fi
         cat >> "$html_file" << HTMLCARD
@@ -1122,19 +1162,12 @@ HTMLCARD
                 # Main flow - Definition view section
                 03_*|04b_*|07_*|08b_*|09c_*)
                     definition_files+=("$filename|$label") ;;
-                # Edge cases - Long content (etymology, definitions)
-                outlier_11*|outlier_12*|outlier_16*)
+                # Edge cases - Long content (etymology, definitions, scrolled)
+                outlier_11*|outlier_12*|outlier_16*|outlier_17*)
                     edge_long_files+=("$filename|$label") ;;
                 # Edge cases - Many items (many definitions with scroll)
                 outlier_13*|outlier_14*|outlier_15*)
                     edge_many_files+=("$filename|$label") ;;
-                # Legacy patterns for backward compatibility
-                outlier_01*|outlier_03*|outlier_04*)
-                    edge_long_files+=("$filename|$label") ;;
-                outlier_02*)
-                    edge_many_files+=("$filename|$label") ;;
-                outlier_05*|outlier_06*)
-                    edge_missing_files+=("$filename|$label") ;;
                 *)
                     # Fallback: put uncategorized in search section
                     search_files+=("$filename|$label") ;;
@@ -1341,7 +1374,10 @@ HTMLEND
 # Command: test
 # ============================================================
 cmd_test() {
-    echo -e "${BLUE}=== Running Tests ===${NC}"
+    local build_type="debug"
+    [ "$BUILD_RELEASE" = true ] && build_type="release"
+    
+    echo -e "${BLUE}=== Running Tests ($build_type) ===${NC}"
     echo ""
     
     # Initialize backend
@@ -1355,13 +1391,30 @@ cmd_test() {
     local serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
     
     echo -e "Target: ${GREEN}$model${NC} ($serial)"
+    echo -e "Build:  ${GREEN}$build_type${NC}"
     echo ""
     
     # Check if test APK is installed
     if ! backend_app_installed "org.example.dictapp.test"; then
         echo -e "${RED}ERROR: Test APK not installed${NC}"
-        echo "Run: $0 install --target $TARGET"
+        echo "Run: $0 install --target $TARGET$( [ "$BUILD_RELEASE" = true ] && echo " --release" )"
         exit 1
+    fi
+    
+    # Check if app is installed
+    if ! backend_app_installed "org.example.dictapp"; then
+        echo -e "${RED}ERROR: App not installed${NC}"
+        echo "Run: $0 install --target $TARGET$( [ "$BUILD_RELEASE" = true ] && echo " --release" )"
+        exit 1
+    fi
+    
+    # Warn about potential signing issues with release builds
+    if [ "$BUILD_RELEASE" = true ]; then
+        echo -e "${YELLOW}Note: Testing release build (R8/ProGuard enabled).${NC}"
+        echo -e "${YELLOW}If tests fail with INSTRUMENTATION_FAILED, the release and test${NC}"
+        echo -e "${YELLOW}APKs may have incompatible signatures. Ensure keystore.properties${NC}"
+        echo -e "${YELLOW}is configured, or use 'capture --release' for smoke testing.${NC}"
+        echo ""
     fi
     
     # Determine test to run

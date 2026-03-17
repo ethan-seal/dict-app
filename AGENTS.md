@@ -107,6 +107,15 @@ The `run-e2e.sh` script provides a unified interface for building, testing, and 
 ./run-e2e.sh test --target device
 ```
 
+**Test with production release build (R8/ProGuard):**
+```bash
+./run-e2e.sh build --release
+./run-e2e.sh install --target device --release
+./run-e2e.sh test --target device --release
+# Or capture screenshots of the release build:
+./run-e2e.sh capture --target device --release
+```
+
 **Fast iteration (screenshots only, no dark mode or video):**
 ```bash
 ./run-e2e.sh capture --target emulator --no-video --skip-dark --skip-build
