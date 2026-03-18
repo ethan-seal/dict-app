@@ -255,6 +255,33 @@ backend_restart_app() {
     backend_open_app "$@"
 }
 
+# Get the package name of the currently focused/foreground app.
+# Returns the package name on stdout, or empty string if it can't be determined.
+# Usage: local pkg=$(backend_get_foreground_pkg)
+backend_get_foreground_pkg() {
+    backend_check_init || return $?
+    $BACKEND_ADB -s "$BACKEND_SERIAL" shell "dumpsys activity activities" 2>/dev/null | \
+        grep -E 'mFocusedApp|mResumedActivity' | head -1 | \
+        grep -oE '[a-zA-Z][a-zA-Z0-9_.]*/' | head -1 | tr -d '/'
+}
+
+# Check that our app is in the foreground.
+# Returns 0 if the expected package is focused, 1 otherwise.
+# Usage: backend_assert_foreground [package]
+backend_assert_foreground() {
+    backend_check_init || return $?
+    local expected="${1:-$BACKEND_PKG}"
+    local actual
+    actual=$(backend_get_foreground_pkg)
+    
+    if [ "$actual" = "$expected" ]; then
+        return 0
+    else
+        echo "backend_assert_foreground: expected '$expected' but got '$actual'" >&2
+        return 1
+    fi
+}
+
 # Max screenshot dimension (longest side) for API compatibility.
 # Anthropic recommends max 1568px; images above this are auto-resized
 # by the API but waste bandwidth. Set to 0 to disable resizing.
@@ -262,11 +289,24 @@ BACKEND_SCREENSHOT_MAX_DIM=${BACKEND_SCREENSHOT_MAX_DIM:-1568}
 
 # Take screenshot
 # Usage: backend_screenshot "name" "/path/to/output.png"
+#
+# Checks that the expected app is in the foreground before capturing.
+# Fails with a clear error if a different app or the lock screen is visible.
 backend_screenshot() {
     backend_check_init || return $?
     local name="$1"
     local output="$2"
     local tmp="/sdcard/backend_screenshot.png"
+    
+    # Verify our app is in the foreground
+    local fg_pkg
+    fg_pkg=$(backend_get_foreground_pkg)
+    if [ "$fg_pkg" != "$BACKEND_PKG" ]; then
+        echo "ERROR: screenshot '$name' aborted — wrong app in foreground" >&2
+        echo "  Expected: $BACKEND_PKG" >&2
+        echo "  Actual:   ${fg_pkg:-<none/lock screen>}" >&2
+        return 1
+    fi
     
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell screencap -p "$tmp"
     $BACKEND_ADB -s "$BACKEND_SERIAL" pull "$tmp" "$output" 2>/dev/null
