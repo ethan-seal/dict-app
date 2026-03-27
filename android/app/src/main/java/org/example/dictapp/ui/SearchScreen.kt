@@ -153,6 +153,7 @@ fun SearchScreen(
                         SearchResultsList(
                             results = state.results,
                             isLoadingMore = state.isLoadingMore,
+                            searchQuery = query,
                             onResultClick = onWordClick,
                             onLoadMore = { viewModel.loadMoreResults() },
                             modifier = Modifier.testTag(TestTags.SEARCH_RESULTS_LIST)
@@ -175,11 +176,17 @@ fun SearchScreen(
 private fun SearchResultsList(
     results: List<SearchResult>,
     isLoadingMore: Boolean,
+    searchQuery: String,
     onResultClick: (Long) -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+
+    // Scroll to top whenever the query changes (new search, not load-more).
+    LaunchedEffect(searchQuery) {
+        listState.scrollToItem(0)
+    }
 
     // Detect when the user scrolls near the end.
     // canScrollForward guards against triggering when all items fit on screen.
