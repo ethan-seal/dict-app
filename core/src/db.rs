@@ -124,7 +124,7 @@ pub fn init_database(db_path: &str) -> Result<DictHandle> {
 pub fn open_readonly(db_path: &str) -> Result<DictHandle> {
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
-    // Log database stats on open (useful for diagnostics)
+    // Log database stats and SQLite configuration on open
     if log::log_enabled!(log::Level::Info) {
         let word_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM words", [], |row| row.get(0))
@@ -132,11 +132,40 @@ pub fn open_readonly(db_path: &str) -> Result<DictHandle> {
         let def_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM definitions", [], |row| row.get(0))
             .unwrap_or(-1);
+
+        // Log SQLite configuration for performance diagnostics
+        let cache_size: i64 = conn
+            .query_row("PRAGMA cache_size", [], |row| row.get(0))
+            .unwrap_or(0);
+        let page_size: i64 = conn
+            .query_row("PRAGMA page_size", [], |row| row.get(0))
+            .unwrap_or(0);
+        let mmap_size: i64 = conn
+            .query_row("PRAGMA mmap_size", [], |row| row.get(0))
+            .unwrap_or(0);
+        let journal_mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap_or_default();
+
+        // Get database file size
+        let db_size = std::fs::metadata(db_path)
+            .map(|m| m.len() as i64)
+            .unwrap_or(-1);
+
         log::info!(
             "Opened database '{}': {} words, {} definitions",
             db_path,
             word_count,
             def_count
+        );
+        log::info!(
+            "PERF SQLite config: cache_size={} pages ({}KB effective), page_size={}, mmap_size={}, journal={}, db_file_size={}MB",
+            cache_size,
+            (cache_size.abs() * page_size) / 1024,
+            page_size,
+            mmap_size,
+            journal_mode,
+            db_size / (1024 * 1024),
         );
     }
 

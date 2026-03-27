@@ -20,6 +20,13 @@ use crate::{get_definition, init, search_with_offset, DictHandle};
 /// using a handle map with integer keys.
 static HANDLE: Mutex<Option<DictHandle>> = Mutex::new(None);
 
+/// Interrupt handle for cancelling in-flight SQLite queries.
+///
+/// Stored separately from HANDLE so it can be accessed without blocking
+/// on the main mutex (which is held during searches). This breaks the
+/// "mutex convoy" problem where queued searches block each other.
+static INTERRUPT: Mutex<Option<rusqlite::InterruptHandle>> = Mutex::new(None);
+
 /// Error codes returned by FFI functions
 #[repr(C)]
 pub enum FfiError {
@@ -61,6 +68,12 @@ pub unsafe extern "C" fn dict_init(db_path: *const c_char) -> c_int {
 
     match init(path) {
         Ok(handle) => {
+            // Store interrupt handle first (before moving handle into HANDLE)
+            let interrupt_handle = handle.conn.get_interrupt_handle();
+            {
+                let mut ih = INTERRUPT.lock().unwrap();
+                *ih = Some(interrupt_handle);
+            }
             let mut guard = HANDLE.lock().unwrap();
             *guard = Some(handle);
             FfiError::Success as c_int
@@ -180,6 +193,24 @@ pub unsafe extern "C" fn dict_free_string(ptr: *mut c_char) {
     }
 }
 
+/// Cancel any in-flight search by interrupting the SQLite query.
+///
+/// This is safe to call from any thread. It signals the database to abort
+/// the currently running SQL statement, which will return an empty result set.
+/// If no query is running, this is a no-op.
+///
+/// # Returns
+///
+/// 0 on success.
+#[no_mangle]
+pub extern "C" fn dict_cancel_search() -> c_int {
+    let guard = INTERRUPT.lock().unwrap();
+    if let Some(ih) = guard.as_ref() {
+        ih.interrupt();
+    }
+    FfiError::Success as c_int
+}
+
 /// Close the dictionary and free resources
 ///
 /// # Returns
@@ -187,6 +218,12 @@ pub unsafe extern "C" fn dict_free_string(ptr: *mut c_char) {
 /// 0 on success.
 #[no_mangle]
 pub extern "C" fn dict_close() -> c_int {
+    // Clear interrupt handle first — must happen before dropping the
+    // connection, since InterruptHandle holds a raw pointer to sqlite3.
+    {
+        let mut ih = INTERRUPT.lock().unwrap();
+        *ih = None;
+    }
     let mut guard = HANDLE.lock().unwrap();
     *guard = None;
     FfiError::Success as c_int
@@ -211,6 +248,7 @@ pub extern "C" fn dict_version() -> *const c_char {
 #[cfg(target_os = "android")]
 mod android {
     use std::ptr;
+    use std::time::Instant;
 
     use jni::objects::{JClass, JString};
     use jni::sys::{jint, jlong, jstring};
@@ -237,6 +275,11 @@ mod android {
 
         match init(&path) {
             Ok(handle) => {
+                let interrupt_handle = handle.conn.get_interrupt_handle();
+                {
+                    let mut ih = INTERRUPT.lock().unwrap();
+                    *ih = Some(interrupt_handle);
+                }
                 let mut guard = HANDLE.lock().unwrap();
                 *guard = Some(handle);
                 FfiError::Success as jint
@@ -259,6 +302,8 @@ mod android {
         limit: jint,
         offset: jint,
     ) -> jstring {
+        let jni_start = Instant::now();
+
         let query_str: String = match env.get_string(&query) {
             Ok(s) => s.into(),
             Err(_) => return ptr::null_mut(),
@@ -271,7 +316,10 @@ mod android {
             offset
         );
 
+        let mutex_start = Instant::now();
         let guard = HANDLE.lock().unwrap();
+        let mutex_elapsed = mutex_start.elapsed();
+
         let handle = match guard.as_ref() {
             Some(h) => h,
             None => {
@@ -280,7 +328,9 @@ mod android {
             }
         };
 
+        let search_start = Instant::now();
         let results = search_with_offset(handle, &query_str, limit as u32, offset as u32);
+        let search_elapsed = search_start.elapsed();
 
         log::debug!(
             "JNI search: query='{}' returned {} results, first IDs: {:?}",
@@ -289,6 +339,7 @@ mod android {
             results.iter().take(3).map(|r| r.id).collect::<Vec<_>>()
         );
 
+        let json_start = Instant::now();
         let json = match serde_json::to_string(&results) {
             Ok(j) => j,
             Err(e) => {
@@ -296,14 +347,35 @@ mod android {
                 return ptr::null_mut();
             }
         };
+        let json_elapsed = json_start.elapsed();
+        let json_len = json.len();
 
-        match env.new_string(&json) {
+        let jni_str_start = Instant::now();
+        let result = match env.new_string(&json) {
             Ok(s) => s.into_raw(),
             Err(e) => {
                 log::error!("JNI search: failed to create Java string: {:?}", e);
-                ptr::null_mut()
+                return ptr::null_mut();
             }
-        }
+        };
+        let jni_str_elapsed = jni_str_start.elapsed();
+
+        // Drop the mutex guard before logging to avoid holding it during I/O
+        drop(guard);
+
+        let total_elapsed = jni_start.elapsed();
+        log::info!(
+            "PERF JNI search '{}' total={:.2}ms | mutex={:.3}ms search={:.2}ms json={:.3}ms({} bytes) jni_str={:.3}ms",
+            query_str,
+            total_elapsed.as_secs_f64() * 1000.0,
+            mutex_elapsed.as_secs_f64() * 1000.0,
+            search_elapsed.as_secs_f64() * 1000.0,
+            json_elapsed.as_secs_f64() * 1000.0,
+            json_len,
+            jni_str_elapsed.as_secs_f64() * 1000.0,
+        );
+
+        result
     }
 
     /// JNI: Get full definition
@@ -355,11 +427,30 @@ mod android {
         }
     }
 
+    /// JNI: Cancel any in-flight search
+    ///
+    /// Kotlin signature: external fun cancelSearch()
+    #[no_mangle]
+    pub extern "system" fn Java_org_example_dictapp_DictCore_cancelSearch(
+        _env: JNIEnv,
+        _class: JClass,
+    ) {
+        let guard = INTERRUPT.lock().unwrap();
+        if let Some(ih) = guard.as_ref() {
+            ih.interrupt();
+            log::debug!("cancelSearch: interrupted in-flight query");
+        }
+    }
+
     /// JNI: Close the dictionary
     ///
     /// Kotlin signature: external fun close()
     #[no_mangle]
     pub extern "system" fn Java_org_example_dictapp_DictCore_close(_env: JNIEnv, _class: JClass) {
+        {
+            let mut ih = INTERRUPT.lock().unwrap();
+            *ih = None;
+        }
         let mut guard = HANDLE.lock().unwrap();
         *guard = None;
     }

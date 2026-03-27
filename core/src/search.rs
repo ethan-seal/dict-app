@@ -5,6 +5,8 @@
 //! - Prefix matching for autocomplete
 //! - Fuzzy/approximate string matching using Levenshtein distance
 
+use std::time::Instant;
+
 use rusqlite::params;
 
 use crate::models::SearchResult;
@@ -34,6 +36,8 @@ pub fn search_words_offset(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<SearchResult>> {
+    let search_start = Instant::now();
+
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
@@ -52,16 +56,23 @@ pub fn search_words_offset(
     let mut results = Vec::new();
 
     // 1. Exact matches (highest priority, score = 0)
+    let tier_start = Instant::now();
     let exact_results = search_exact(handle, query, total_needed)?;
+    let exact_count = exact_results.len();
     for mut result in exact_results {
         result.score = 0.0;
         results.push(result);
     }
+    let exact_elapsed = tier_start.elapsed();
 
+    let mut prefix_elapsed = std::time::Duration::ZERO;
+    let mut prefix_count = 0usize;
     if (results.len() as u32) < total_needed {
         // 2. Prefix matches (score based on length difference)
+        let tier_start = Instant::now();
         let remaining = total_needed - results.len() as u32;
         let prefix_results = search_prefix(handle, query, remaining)?;
+        prefix_count = prefix_results.len();
 
         // Add only results not already in the list
         for mut result in prefix_results {
@@ -72,12 +83,17 @@ pub fn search_words_offset(
                 results.push(result);
             }
         }
+        prefix_elapsed = tier_start.elapsed();
     }
 
+    let mut fts_elapsed = std::time::Duration::ZERO;
+    let mut fts_count = 0usize;
     if (results.len() as u32) < total_needed {
         // 3. FTS matches (score from FTS5 rank)
+        let tier_start = Instant::now();
         let remaining = total_needed - results.len() as u32;
         let fts_results = search_fts(handle, &fts_query, remaining)?;
+        fts_count = fts_results.len();
 
         for mut result in fts_results {
             if !results.iter().any(|r| r.id == result.id) {
@@ -86,18 +102,24 @@ pub fn search_words_offset(
                 results.push(result);
             }
         }
+        fts_elapsed = tier_start.elapsed();
     }
 
     // 4. Fuzzy matches (only if query is long enough and we need more results)
+    let mut fuzzy_elapsed = std::time::Duration::ZERO;
+    let mut fuzzy_count = 0usize;
     if (results.len() as u32) < total_needed && query_lower.len() >= MIN_FUZZY_QUERY_LENGTH {
+        let tier_start = Instant::now();
         let remaining = total_needed - results.len() as u32;
         let fuzzy_results = search_fuzzy(handle, &query_lower, remaining)?;
+        fuzzy_count = fuzzy_results.len();
 
         for result in fuzzy_results {
             if !results.iter().any(|r| r.id == result.id) {
                 results.push(result);
             }
         }
+        fuzzy_elapsed = tier_start.elapsed();
     }
 
     // Sort by score (lower is better)
@@ -111,6 +133,23 @@ pub fn search_words_offset(
     let start = std::cmp::min(offset as usize, results.len());
     let end = std::cmp::min(start + limit as usize, results.len());
     let results = results[start..end].to_vec();
+
+    let total_elapsed = search_start.elapsed();
+
+    log::info!(
+        "PERF search '{}' total={:.2}ms | exact={:.2}ms({}) prefix={:.2}ms({}) fts={:.2}ms({}) fuzzy={:.2}ms({}) | results={}",
+        query,
+        total_elapsed.as_secs_f64() * 1000.0,
+        exact_elapsed.as_secs_f64() * 1000.0,
+        exact_count,
+        prefix_elapsed.as_secs_f64() * 1000.0,
+        prefix_count,
+        fts_elapsed.as_secs_f64() * 1000.0,
+        fts_count,
+        fuzzy_elapsed.as_secs_f64() * 1000.0,
+        fuzzy_count,
+        results.len(),
+    );
 
     Ok(results)
 }
@@ -142,7 +181,7 @@ fn search_prefix(handle: &DictHandle, prefix: &str, limit: u32) -> Result<Vec<Se
                COALESCE((SELECT definition FROM definitions WHERE word_id = w.id LIMIT 1), '')
         FROM words w
         WHERE w.word LIKE ?
-        ORDER BY length(w.word), w.word
+        ORDER BY w.word
         LIMIT ?
         "#,
     )?;
@@ -187,12 +226,15 @@ fn search_fts(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Search
 /// This function retrieves candidate words and filters them by edit distance.
 /// For performance, it uses prefix-based candidates when possible.
 fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<SearchResult>> {
+    let fuzzy_start = Instant::now();
+
     // Get candidates: words that start with the first character(s) of the query
     // This significantly reduces the search space
     let prefix_len = std::cmp::min(2, query.len());
     let prefix = &query[..prefix_len];
     let pattern = format!("{}%", prefix);
 
+    let query_start = Instant::now();
     let mut stmt = handle.conn.prepare(
         r#"
         SELECT w.id, w.word, w.pos,
@@ -206,11 +248,15 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
     let candidates = stmt.query_map(params![pattern], row_to_search_result)?;
 
     // Filter and score by Levenshtein distance
+    let mut prefix_candidates_count = 0u32;
+    let mut prefix_lev_computed = 0u32;
     let mut fuzzy_results: Vec<SearchResult> = candidates
         .filter_map(|r| r.ok())
         .filter_map(|mut result| {
+            prefix_candidates_count += 1;
             let word_lower = result.word.to_lowercase();
             let distance = levenshtein_distance(query, &word_lower);
+            prefix_lev_computed += 1;
 
             if distance > 0 && distance <= MAX_FUZZY_DISTANCE {
                 // Score is 3.0 (base for fuzzy) + distance
@@ -221,9 +267,14 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
             }
         })
         .collect();
+    let prefix_query_elapsed = query_start.elapsed();
 
     // Also try candidates that differ by first character (common typos)
+    let mut suffix_candidates_count = 0u32;
+    let mut suffix_lev_computed = 0u32;
+    let mut suffix_query_elapsed = std::time::Duration::ZERO;
     if fuzzy_results.len() < limit as usize && query.len() >= 2 {
+        let suffix_start = Instant::now();
         // Get some words that might match with a different first letter
         let suffix = &query[1..];
         let suffix_pattern = format!("_%{}%", suffix);
@@ -241,12 +292,14 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
         let more_candidates = stmt2.query_map(params![suffix_pattern], row_to_search_result)?;
 
         for result in more_candidates.filter_map(|r| r.ok()) {
+            suffix_candidates_count += 1;
             if fuzzy_results.iter().any(|r| r.id == result.id) {
                 continue;
             }
 
             let word_lower = result.word.to_lowercase();
             let distance = levenshtein_distance(query, &word_lower);
+            suffix_lev_computed += 1;
 
             if distance > 0 && distance <= MAX_FUZZY_DISTANCE {
                 let mut result = result;
@@ -254,6 +307,7 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
                 fuzzy_results.push(result);
             }
         }
+        suffix_query_elapsed = suffix_start.elapsed();
     }
 
     // Sort by score
@@ -263,6 +317,20 @@ fn search_fuzzy(handle: &DictHandle, query: &str, limit: u32) -> Result<Vec<Sear
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     fuzzy_results.truncate(limit as usize);
+
+    let total_fuzzy = fuzzy_start.elapsed();
+    log::info!(
+        "PERF fuzzy '{}' total={:.2}ms | prefix_scan={:.2}ms(candidates={}, lev={}) suffix_scan={:.2}ms(candidates={}, lev={}) | matches={}",
+        query,
+        total_fuzzy.as_secs_f64() * 1000.0,
+        prefix_query_elapsed.as_secs_f64() * 1000.0,
+        prefix_candidates_count,
+        prefix_lev_computed,
+        suffix_query_elapsed.as_secs_f64() * 1000.0,
+        suffix_candidates_count,
+        suffix_lev_computed,
+        fuzzy_results.len(),
+    );
 
     Ok(fuzzy_results)
 }
@@ -636,5 +704,173 @@ mod tests {
             words.contains(&"hello"),
             "Expected to find 'hello' for query 'helo'"
         );
+    }
+
+    /// Diagnostic test: run with `cargo test -p dict-core diagnose_search_performance -- --nocapture`
+    ///
+    /// Creates a database with 10K+ words and runs various query patterns,
+    /// printing per-tier timing breakdown directly to stderr.
+    #[test]
+    fn diagnose_search_performance() {
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("perf_diag.db");
+
+        // Create database with full schema (including lang_code column)
+        let handle = init_database(db_path.to_str().unwrap()).unwrap();
+
+        let base_words = [
+            "hello",
+            "help",
+            "helper",
+            "helping",
+            "helicopter",
+            "heliocentric",
+            "world",
+            "word",
+            "work",
+            "worker",
+            "test",
+            "testing",
+            "example",
+            "dictionary",
+            "language",
+            "definition",
+            "search",
+            "find",
+            "result",
+            "performance",
+            "algorithm",
+            "database",
+            "application",
+            "function",
+            "abstract",
+            "beautiful",
+            "complete",
+            "dangerous",
+            "elephant",
+            "familiar",
+            "generate",
+            "hospital",
+            "important",
+            "junction",
+        ];
+
+        // Insert 10K words directly (bypasses JSONL import)
+        for i in 0..10_000 {
+            let base = base_words[i % base_words.len()];
+            let word = if i < base_words.len() {
+                base.to_string()
+            } else {
+                format!("{}_{}", base, i / base_words.len())
+            };
+            let word_id = insert_word(&handle.conn, &word, "noun", "English", "en", 0).unwrap();
+            insert_definition(
+                &handle.conn,
+                word_id,
+                &format!("Definition for {}", word),
+                &[],
+                &[],
+            )
+            .unwrap();
+        }
+
+        // Close and reopen in read-only mode (like production)
+        drop(handle);
+        let handle = crate::db::open_readonly(db_path.to_str().unwrap()).unwrap();
+
+        // Verify database was populated
+        let word_count = crate::db::get_word_count(&handle).unwrap();
+        eprintln!("  Database contains {} words", word_count);
+        assert!(word_count > 0, "Database should contain words after import");
+
+        // Query patterns that exercise different tiers
+        let queries = [
+            ("exact match", "hello", "tier 1 only"),
+            ("prefix (short)", "hel", "tiers 1-2"),
+            ("prefix (single)", "h", "tiers 1-2, many results"),
+            ("fts multi-word", "hello world", "tiers 1-3"),
+            ("typo (fuzzy)", "helo", "tiers 1-4, fuzzy triggered"),
+            ("typo (first char)", "xello", "tiers 1-4, suffix fuzzy scan"),
+            ("no match (short)", "zq", "all tiers, no fuzzy (too short)"),
+            (
+                "no match (long)",
+                "zqxyw",
+                "all tiers including fuzzy, 0 results",
+            ),
+            ("gibberish", "asdfghjkl", "all tiers, expensive fuzzy"),
+        ];
+
+        eprintln!("\n{}", "=".repeat(100));
+        eprintln!(
+            "  SEARCH PERFORMANCE DIAGNOSTICS ({} words in database)",
+            10_000
+        );
+        eprintln!("{}", "=".repeat(100));
+
+        for (label, query, description) in queries {
+            // Warmup
+            let _ = search_words(&handle, query, 15);
+
+            // Timed combined search (average of 5)
+            let mut times = Vec::new();
+            for _ in 0..5 {
+                let start = Instant::now();
+                let results = search_words(&handle, query, 15).unwrap();
+                let elapsed = start.elapsed();
+                times.push((elapsed, results.len()));
+            }
+
+            let avg_us = times.iter().map(|(d, _)| d.as_micros()).sum::<u128>() / 5;
+            let result_count = times[0].1;
+
+            eprintln!(
+                "\n  [{:20}] query={:15} => {} results  total_avg={:>6}µs  ({})",
+                label,
+                format!("'{}'", query),
+                result_count,
+                avg_us,
+                description,
+            );
+
+            // Per-tier breakdown
+            let limit = 15u32;
+            let fts_query = prepare_fts_query(query);
+            let query_lower = query.to_lowercase();
+
+            // Tier 1: Exact
+            let start = Instant::now();
+            let exact = search_exact(&handle, query, limit).unwrap();
+            let exact_us = start.elapsed().as_micros();
+
+            // Tier 2: Prefix
+            let start = Instant::now();
+            let prefix = search_prefix(&handle, query, limit).unwrap();
+            let prefix_us = start.elapsed().as_micros();
+
+            // Tier 3: FTS5
+            let start = Instant::now();
+            let fts = search_fts(&handle, &fts_query, limit).unwrap();
+            let fts_us = start.elapsed().as_micros();
+
+            // Tier 4: Fuzzy (only if query long enough)
+            let (fuzzy_us, fuzzy_count) = if query_lower.len() >= MIN_FUZZY_QUERY_LENGTH {
+                let start = Instant::now();
+                let fuzzy = search_fuzzy(&handle, &query_lower, limit).unwrap();
+                (start.elapsed().as_micros(), fuzzy.len())
+            } else {
+                (0, 0)
+            };
+
+            eprintln!(
+                "    exact={:>5}µs({:>2})  prefix={:>5}µs({:>2})  fts={:>5}µs({:>2})  fuzzy={:>5}µs({:>2})",
+                exact_us, exact.len(),
+                prefix_us, prefix.len(),
+                fts_us, fts.len(),
+                fuzzy_us, fuzzy_count,
+            );
+        }
+        eprintln!("\n{}\n", "=".repeat(100));
     }
 }

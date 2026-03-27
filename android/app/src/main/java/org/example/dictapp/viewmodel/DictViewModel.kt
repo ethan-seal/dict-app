@@ -129,6 +129,11 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
     private var currentOffset = 0
     private var currentSearchQuery = ""
 
+    // Performance tracking: timestamp of last keystroke (for e2e measurement)
+    @Volatile private var lastKeystrokeNanos = 0L
+    @Volatile private var activeSearchJob: Job? = null
+    private var searchSequenceNumber = 0
+
     // Search state
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -159,7 +164,10 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
                 .distinctUntilChanged()
                 .filter { it.isNotBlank() }
                 .collect { query ->
-                    performSearch(query)
+                    val debounceExitNanos = System.nanoTime()
+                    val sinceKeystroke = (debounceExitNanos - lastKeystrokeNanos) / 1_000_000.0
+                    Log.i(TAG, "PERF debounce '$query' fired ${String.format("%.1f", sinceKeystroke)}ms after last keystroke")
+                    performSearch(query, debounceExitNanos)
                 }
         }
     }
@@ -242,9 +250,12 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
      * This triggers a debounced search automatically.
      */
     fun onQueryChange(newQuery: String) {
+        lastKeystrokeNanos = System.nanoTime()
         _query.value = newQuery
 
         if (newQuery.isBlank()) {
+            activeSearchJob?.cancel()
+            activeSearchJob = null
             _searchState.value = SearchState.Idle
         }
     }
@@ -259,27 +270,59 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Perform search on background thread.
      * Resets pagination and fetches the first page.
+     * Cancels any in-flight search to avoid wasted work and stale results.
      */
-    private fun performSearch(query: String) {
-        viewModelScope.launch {
+    private fun performSearch(query: String, debounceExitNanos: Long = System.nanoTime()) {
+        // Interrupt in-flight SQLite query at the native level.
+        // This causes the running SQL statement to abort immediately,
+        // releasing the native mutex so the new search doesn't queue behind it.
+        DictCore.cancelSearch()
+
+        // Cancel previous coroutine job
+        val prevJob = activeSearchJob
+        if (prevJob != null && prevJob.isActive) {
+            prevJob.cancel()
+            Log.i(TAG, "PERF cancelled previous search for '$currentSearchQuery'")
+        }
+
+        val seq = ++searchSequenceNumber
+
+        activeSearchJob = viewModelScope.launch {
             try {
                 currentSearchQuery = query
                 currentOffset = 0
-                Log.d(TAG, "performSearch: searching for '$query'")
+
+                val dispatchStart = System.nanoTime()
                 val results = withContext(Dispatchers.IO) {
+                    val ioArrival = System.nanoTime()
+                    val dispatchOverhead = (ioArrival - dispatchStart) / 1_000_000.0
+                    Log.i(TAG, "PERF [$seq] IO dispatch overhead: ${String.format("%.2f", dispatchOverhead)}ms for '$query'")
+
                     DictCore.searchParsed(query, PAGE_SIZE, 0)
                 }
+
+                val stateUpdateStart = System.nanoTime()
                 val canLoadMore = results.size >= PAGE_SIZE
                 currentOffset = results.size
-                Log.d(TAG, "performSearch: got ${results.size} results for '$query'")
-                // Log first few result IDs for debugging
-                results.take(3).forEachIndexed { index, result ->
-                    Log.d(TAG, "performSearch: result[$index] id=${result.id}, word='${result.word}'")
-                }
+
                 _searchState.value = SearchState.Success(
                     results = results,
                     canLoadMore = canLoadMore
                 )
+                val stateUpdateElapsed = (System.nanoTime() - stateUpdateStart) / 1_000_000.0
+
+                // Log the complete e2e timing
+                val totalFromDebounce = (System.nanoTime() - debounceExitNanos) / 1_000_000.0
+                val totalFromKeystroke = (System.nanoTime() - lastKeystrokeNanos) / 1_000_000.0
+                Log.i(TAG, "PERF [$seq] e2e '$query' " +
+                    "fromKeystroke=${String.format("%.1f", totalFromKeystroke)}ms " +
+                    "fromDebounce=${String.format("%.1f", totalFromDebounce)}ms " +
+                    "stateUpdate=${String.format("%.2f", stateUpdateElapsed)}ms " +
+                    "results=${results.size}")
+
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.i(TAG, "PERF [$seq] search '$query' was cancelled")
+                throw e // Re-throw to properly cancel the coroutine
             } catch (e: Exception) {
                 Log.e(TAG, "performSearch: failed for '$query'", e)
                 _searchState.value = SearchState.Error(
@@ -298,13 +341,17 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
         if (currentState !is SearchState.Success) return
         if (currentState.isLoadingMore || !currentState.canLoadMore) return
 
+        Log.i(TAG, "PERF loadMore: offset=$currentOffset query='$currentSearchQuery' currentResults=${currentState.results.size}")
+
         _searchState.value = currentState.copy(isLoadingMore = true)
 
         viewModelScope.launch {
             try {
+                val loadMoreStart = System.nanoTime()
                 val moreResults = withContext(Dispatchers.IO) {
                     DictCore.searchParsed(currentSearchQuery, PAGE_SIZE, currentOffset)
                 }
+                val loadMoreElapsed = (System.nanoTime() - loadMoreStart) / 1_000_000.0
                 val canLoadMore = moreResults.size >= PAGE_SIZE
                 currentOffset += moreResults.size
                 val combined = currentState.results + moreResults
@@ -313,6 +360,7 @@ class DictViewModel(application: Application) : AndroidViewModel(application) {
                     isLoadingMore = false,
                     canLoadMore = canLoadMore
                 )
+                Log.i(TAG, "PERF loadMore done: +${moreResults.size} results in ${String.format("%.1f", loadMoreElapsed)}ms, total=${combined.size}")
             } catch (e: Exception) {
                 // On error loading more, keep existing results but stop loading
                 _searchState.value = currentState.copy(

@@ -69,6 +69,14 @@ object DictCore {
     external fun getDefinition(wordId: Long): String?
 
     /**
+     * Cancel any in-flight search by interrupting the SQLite query.
+     *
+     * Safe to call from any thread. If no query is running, this is a no-op.
+     * The interrupted search will return empty results.
+     */
+    external fun cancelSearch()
+
+    /**
      * Close the dictionary and free resources.
      */
     external fun close()
@@ -82,14 +90,20 @@ object DictCore {
      * @return List of SearchResult objects
      */
     fun searchParsed(query: String, limit: Int = 50, offset: Int = 0): List<SearchResult> {
+        val jniStart = System.nanoTime()
         val jsonStr = search(query, limit, offset)
+        val jniElapsed = (System.nanoTime() - jniStart) / 1_000_000.0
+
         if (jsonStr == null) {
             Log.w(TAG, "searchParsed('$query'): native returned null")
             return emptyList()
         }
+
+        val parseStart = System.nanoTime()
         return try {
             val results = json.decodeFromString<List<SearchResult>>(jsonStr)
-            Log.d(TAG, "searchParsed('$query'): got ${results.size} results")
+            val parseElapsed = (System.nanoTime() - parseStart) / 1_000_000.0
+            Log.i(TAG, "PERF searchParsed '$query' jni=${String.format("%.2f", jniElapsed)}ms parse=${String.format("%.2f", parseElapsed)}ms json=${jsonStr.length}bytes results=${results.size}")
             results
         } catch (e: Exception) {
             Log.e(TAG, "searchParsed('$query'): parse failed", e)

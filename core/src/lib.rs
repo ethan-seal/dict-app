@@ -115,7 +115,17 @@ pub fn init(db_path: &str) -> Result<DictHandle> {
 /// }
 /// ```
 pub fn search(handle: &DictHandle, query: &str, limit: u32) -> Vec<SearchResult> {
-    search::search_words(handle, query, limit).unwrap_or_default()
+    match search::search_words(handle, query, limit) {
+        Ok(results) => results,
+        Err(ref e) if is_interrupted(e) => {
+            log::debug!("search '{}' interrupted (cancelled)", query);
+            Vec::new()
+        }
+        Err(e) => {
+            log::error!("search '{}' failed: {:?}", query, e);
+            Vec::new()
+        }
+    }
 }
 
 /// Search for words with offset-based pagination
@@ -139,7 +149,17 @@ pub fn search_with_offset(
     limit: u32,
     offset: u32,
 ) -> Vec<SearchResult> {
-    search::search_words_offset(handle, query, limit, offset).unwrap_or_default()
+    match search::search_words_offset(handle, query, limit, offset) {
+        Ok(results) => results,
+        Err(ref e) if is_interrupted(e) => {
+            log::debug!("search '{}' interrupted (cancelled)", query);
+            Vec::new()
+        }
+        Err(e) => {
+            log::error!("search '{}' failed: {:?}", query, e);
+            Vec::new()
+        }
+    }
 }
 
 /// Get the full definition for a word by its ID
@@ -235,6 +255,20 @@ pub fn import_jsonl_with_stats(
     progress: impl Fn(u64, u64),
 ) -> Result<ImportStats> {
     import::import_from_jsonl_with_stats(db_path, jsonl_path, progress)
+}
+
+/// Check if an error is a SQLite interrupt (from `sqlite3_interrupt()`).
+fn is_interrupted(err: &Error) -> bool {
+    matches!(
+        err,
+        Error::Database(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::OperationInterrupted,
+                ..
+            },
+            _
+        ))
+    )
 }
 
 #[cfg(test)]
