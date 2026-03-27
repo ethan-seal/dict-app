@@ -32,7 +32,7 @@ BACKEND_ERR_INVALID_TARGET=12
 backend_init() {
     local target=""
     local serial=""
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             --target)
@@ -49,49 +49,52 @@ backend_init() {
                 ;;
         esac
     done
-    
+
     if [ -z "$target" ]; then
         echo "backend_init: --target required (device|emulator)" >&2
         return $BACKEND_ERR_INVALID_TARGET
     fi
-    
+
     if [[ "$target" != "device" && "$target" != "emulator" ]]; then
         echo "backend_init: Invalid target '$target' (must be device|emulator)" >&2
         return $BACKEND_ERR_INVALID_TARGET
     fi
-    
+
+    # shellcheck disable=SC2034
     BACKEND_TARGET="$target"
-    
+
     # Find ADB
     backend_find_adb || return $?
-    
+
     # Find device/emulator
     if [ -n "$serial" ]; then
         BACKEND_SERIAL="$serial"
     else
         backend_find_target "$target" || return $?
     fi
-    
+
     # Verify device exists
     if ! $BACKEND_ADB -s "$BACKEND_SERIAL" get-state >/dev/null 2>&1; then
         echo "backend_init: Device $BACKEND_SERIAL not found or offline" >&2
         return $BACKEND_ERR_NO_DEVICE
     fi
-    
+
     # Get screen dimensions
-    local size=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell wm size 2>/dev/null | grep -oE '[0-9]+x[0-9]+' | tail -1)
+    local size
+    size=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell wm size 2>/dev/null | grep -oE '[0-9]+x[0-9]+' | tail -1)
     BACKEND_SCREEN_W=$(echo "$size" | cut -dx -f1)
     BACKEND_SCREEN_H=$(echo "$size" | cut -dx -f2)
-    
+
     # Determine if we should use Espresso (emulator only for now)
     # Try Espresso first, fall back to adb
     if [[ "$target" == "emulator" ]]; then
         # Check if test APK is installed
         if $BACKEND_ADB -s "$BACKEND_SERIAL" shell pm list packages | grep -q "$BACKEND_PKG.test"; then
+            # shellcheck disable=SC2034
             BACKEND_USE_ESPRESSO=true
         fi
     fi
-    
+
     return 0
 }
 
@@ -119,7 +122,7 @@ backend_find_adb() {
 backend_find_target() {
     local target="$1"
     local device=""
-    
+
     if [[ "$target" == "device" ]]; then
         # Find physical device (not emulator)
         device=$($BACKEND_ADB devices 2>/dev/null | grep -v "emulator-" | grep -E "^\S+\s+device$" | head -1 | cut -f1)
@@ -127,13 +130,13 @@ backend_find_target() {
         # Find emulator
         device=$($BACKEND_ADB devices 2>/dev/null | grep "emulator-" | grep -E "\s+device$" | head -1 | cut -f1)
     fi
-    
+
     if [ -z "$device" ]; then
         echo "backend_find_target: No $target found" >&2
         $BACKEND_ADB devices -l >&2
         return $BACKEND_ERR_NO_DEVICE
     fi
-    
+
     BACKEND_SERIAL="$device"
     return 0
 }
@@ -159,7 +162,7 @@ backend_tap() {
     backend_check_init || return $?
     local x=$1
     local y=$2
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell input tap "$x" "$y"
     backend_wait 0.5
 }
@@ -222,7 +225,7 @@ backend_enter() {
 backend_clear_text() {
     backend_check_init || return $?
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell input keyevent KEYCODE_MOVE_END
-    for i in {1..30}; do
+    for _ in {1..30}; do
         $BACKEND_ADB -s "$BACKEND_SERIAL" shell input keyevent KEYCODE_DEL
     done
     backend_wait 0.3
@@ -234,7 +237,7 @@ backend_open_app() {
     backend_check_init || return $?
     local pkg="${1:-$BACKEND_PKG}"
     local activity="${2:-$BACKEND_ACTIVITY}"
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell am start -n "$pkg/$activity" >/dev/null 2>&1
     backend_wait 2
 }
@@ -244,7 +247,7 @@ backend_open_app() {
 backend_stop_app() {
     backend_check_init || return $?
     local pkg="${1:-$BACKEND_PKG}"
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell am force-stop "$pkg"
     backend_wait 0.5
 }
@@ -273,7 +276,7 @@ backend_assert_foreground() {
     local expected="${1:-$BACKEND_PKG}"
     local actual
     actual=$(backend_get_foreground_pkg)
-    
+
     if [ "$actual" = "$expected" ]; then
         return 0
     else
@@ -297,7 +300,7 @@ backend_screenshot() {
     local name="$1"
     local output="$2"
     local tmp="/sdcard/backend_screenshot.png"
-    
+
     # Verify our app is in the foreground
     local fg_pkg
     fg_pkg=$(backend_get_foreground_pkg)
@@ -307,11 +310,11 @@ backend_screenshot() {
         echo "  Actual:   ${fg_pkg:-<none/lock screen>}" >&2
         return 1
     fi
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell screencap -p "$tmp"
     $BACKEND_ADB -s "$BACKEND_SERIAL" pull "$tmp" "$output" 2>/dev/null
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell rm -f "$tmp"
-    
+
     # Resize if needed for API compatibility
     if [ "$BACKEND_SCREENSHOT_MAX_DIM" -gt 0 ] 2>/dev/null && [ -f "$output" ]; then
         backend_resize_image "$output" "$BACKEND_SCREENSHOT_MAX_DIM"
@@ -324,7 +327,7 @@ backend_screenshot() {
 backend_resize_image() {
     local img="$1"
     local max_dim="$2"
-    
+
     if command -v magick >/dev/null 2>&1; then
         magick "$img" -resize "${max_dim}x${max_dim}>" "$img"
     elif command -v convert >/dev/null 2>&1; then
@@ -360,41 +363,46 @@ if longest > $max_dim:
 backend_tap_text() {
     backend_check_init || return $?
     local text="$1"
-    
-    # Dump UI to find element
-    $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /dev/tty 2>/dev/null | \
+
+    # Dump UI to file then search for element bounds
+    $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /sdcard/ui_dump.xml >/dev/null 2>&1
+    local bounds
+    bounds=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell cat /sdcard/ui_dump.xml 2>/dev/null | \
         grep -oE "text=\"$text\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"" | \
         head -1 | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | \
-        grep -oE '[0-9]+' | {
-        read -r left
-        read -r top
-        read -r right
-        read -r bottom
-        if [ -n "$left" ]; then
-            local x=$(( (left + right) / 2 ))
-            local y=$(( (top + bottom) / 2 ))
-            backend_tap "$x" "$y"
-            return 0
-        fi
-        return 1
-    }
+        grep -oE '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]')
+
+    if [ -n "$bounds" ]; then
+        local left top right bottom
+        left=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '1p')
+        top=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '2p')
+        right=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '3p')
+        bottom=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '4p')
+        local x=$(( (left + right) / 2 ))
+        local y=$(( (top + bottom) / 2 ))
+        backend_tap "$x" "$y"
+        return 0
+    fi
+    return 1
 }
 
 # Find search field and tap it
 backend_tap_search() {
     backend_check_init || return $?
-    
+
     # Dump UI and find EditText bounds
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /sdcard/ui_dump.xml 2>/dev/null
-    local bounds=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell "cat /sdcard/ui_dump.xml" 2>/dev/null | \
+    local bounds
+    bounds=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell "cat /sdcard/ui_dump.xml" 2>/dev/null | \
         grep -o 'EditText[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | \
         head -1 | grep -oE '\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]')
-    
+
     if [ -n "$bounds" ]; then
-        local left=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '1p')
-        local top=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '2p')
-        local right=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '3p')
-        local bottom=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '4p')
+        local left top right bottom
+        left=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '1p')
+        top=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '2p')
+        right=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '3p')
+        bottom=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '4p')
         local x=$(( (left + right) / 2 ))
         local y=$(( (top + bottom) / 2 ))
         backend_tap "$x" "$y"
@@ -409,24 +417,27 @@ backend_tap_search() {
 # Find first search result and tap it
 backend_tap_first_result() {
     backend_check_init || return $?
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /sdcard/ui_dump.xml 2>/dev/null
     # Look for clickable views below y=500 (below search bar)
-    local bounds=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell "cat /sdcard/ui_dump.xml" 2>/dev/null | \
+    local bounds
+    bounds=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell "cat /sdcard/ui_dump.xml" 2>/dev/null | \
         grep 'clickable="true"' | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | \
-        while read b; do
-            local top=$(echo "$b" | grep -oE '[0-9]+' | sed -n '2p')
+        while read -r b; do
+            local top
+            top=$(echo "$b" | grep -oE '[0-9]+' | sed -n '2p')
             if [ "$top" -gt 500 ] && [ "$top" -lt 1500 ]; then
                 echo "$b"
                 break
             fi
         done | head -1)
-    
+
     if [ -n "$bounds" ]; then
-        local left=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '1p')
-        local top=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '2p')
-        local right=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '3p')
-        local bottom=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '4p')
+        local left top right bottom
+        left=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '1p')
+        top=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '2p')
+        right=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '3p')
+        bottom=$(echo "$bounds" | grep -oE '[0-9]+' | sed -n '4p')
         local x=$(( (left + right) / 2 ))
         local y=$(( (top + bottom) / 2 ))
         backend_tap "$x" "$y"
@@ -449,11 +460,12 @@ backend_dark_mode() {
 # Get device info
 backend_get_info() {
     backend_check_init || return $?
-    
-    local model=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
-    local sdk=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
-    local abi=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r')
-    
+
+    local model sdk abi
+    model=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+    sdk=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
+    abi=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r')
+
     echo "model=$model"
     echo "sdk=$sdk"
     echo "abi=$abi"
@@ -465,7 +477,7 @@ backend_get_info() {
 backend_app_installed() {
     backend_check_init || return $?
     local pkg="${1:-$BACKEND_PKG}"
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell pm list packages 2>/dev/null | grep -q "^package:$pkg$"
 }
 
@@ -474,12 +486,12 @@ backend_app_installed() {
 backend_install_apk() {
     backend_check_init || return $?
     local apk="$1"
-    
+
     if [ ! -f "$apk" ]; then
         echo "backend_install_apk: File not found: $apk" >&2
         return 1
     fi
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" install -r -g "$apk" 2>&1
 }
 
@@ -487,7 +499,7 @@ backend_install_apk() {
 backend_uninstall_app() {
     backend_check_init || return $?
     local pkg="${1:-$BACKEND_PKG}"
-    
+
     $BACKEND_ADB -s "$BACKEND_SERIAL" uninstall "$pkg" 2>&1
 }
 

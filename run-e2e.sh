@@ -28,6 +28,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Source backend library
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/android-backend.sh"
 
 # Colors
@@ -137,6 +138,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --no-video)
+            # shellcheck disable=SC2034
             CAPTURE_VIDEO=false
             shift
             ;;
@@ -200,7 +202,7 @@ case "$COMMAND" in
             echo -e "${RED}ERROR: --target is required for '$COMMAND' command${NC}"
             usage
         fi
-        
+
         if [[ "$TARGET" != "device" && "$TARGET" != "emulator" ]]; then
             echo -e "${RED}ERROR: --target must be 'device' or 'emulator'${NC}"
             exit 1
@@ -231,7 +233,7 @@ find_android_sdk() {
 cmd_build() {
     echo -e "${BLUE}=== Building ===${NC}"
     echo ""
-    
+
     # Build native libraries
     if [ "$APK_ONLY" = false ]; then
         echo -e "${BLUE}Building native libraries...${NC}"
@@ -239,7 +241,7 @@ cmd_build() {
         echo -e "  ${GREEN}✓${NC} Native libraries built"
         echo ""
     fi
-    
+
     # Build APKs
     if [ "$NATIVE_ONLY" = false ]; then
         if [ "$BUILD_RELEASE" = true ]; then
@@ -258,7 +260,7 @@ cmd_build() {
         fi
         echo ""
     fi
-    
+
     echo -e "${GREEN}Build complete!${NC}"
 }
 
@@ -268,20 +270,22 @@ cmd_build() {
 cmd_install() {
     echo -e "${BLUE}=== Installing ===${NC}"
     echo ""
-    
+
     # Initialize backend
     local backend_args="--target $TARGET"
     [ -n "$SERIAL" ] && backend_args="$backend_args --serial $SERIAL"
+    # shellcheck disable=SC2086
     backend_init $backend_args || exit $?
-    
+
     local info
     info=$(backend_get_info)
-    local model=$(echo "$info" | grep "^model=" | cut -d= -f2)
-    local serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
-    
+    local model serial
+    model=$(echo "$info" | grep "^model=" | cut -d= -f2)
+    serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
+
     echo -e "Target: ${GREEN}$model${NC} ($serial)"
     echo ""
-    
+
     # APK paths
     local app_apk
     if [ "$BUILD_RELEASE" = true ]; then
@@ -290,7 +294,7 @@ cmd_install() {
         app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
     fi
     local test_apk="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-    
+
     # Install app
     if [ "$TEST_ONLY" = false ]; then
         if [ ! -f "$app_apk" ]; then
@@ -298,12 +302,12 @@ cmd_install() {
             echo "Run: $0 build $( [ "$BUILD_RELEASE" = true ] && echo "--release" ) first"
             exit 1
         fi
-        
+
         echo -e "${BLUE}Installing app...${NC}"
         backend_install_apk "$app_apk" | grep -v "^Performing" || true
         echo -e "  ${GREEN}✓${NC} App installed ($( [ "$BUILD_RELEASE" = true ] && echo "release" || echo "debug" ))"
     fi
-    
+
     # Install test APK
     if [ "$APP_ONLY" = false ]; then
         if [ ! -f "$test_apk" ]; then
@@ -314,10 +318,10 @@ cmd_install() {
             echo -e "  ${GREEN}✓${NC} Test APK installed"
         fi
     fi
-    
+
     echo ""
     echo -e "${GREEN}Installation complete!${NC}"
-    
+
     backend_cleanup
 }
 
@@ -327,38 +331,41 @@ cmd_install() {
 cmd_logs() {
     echo -e "${BLUE}=== Collecting Logs ===${NC}"
     echo ""
-    
+
     # Initialize backend
     local backend_args="--target $TARGET"
     [ -n "$SERIAL" ] && backend_args="$backend_args --serial $SERIAL"
+    # shellcheck disable=SC2086
     backend_init $backend_args || exit $?
-    
+
     local info
     info=$(backend_get_info)
-    local model=$(echo "$info" | grep "^model=" | cut -d= -f2)
-    local serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
-    
+    local model serial
+    model=$(echo "$info" | grep "^model=" | cut -d= -f2)
+    serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
+
     echo -e "Target: ${GREEN}$model${NC} ($serial)"
     echo ""
-    
+
     # Clear logs if requested
     if [ "$CLEAR_LOGS" = true ]; then
         echo -e "${YELLOW}Clearing logcat...${NC}"
         backend_logcat_clear
         echo ""
     fi
-    
+
     # Setup filter
     local filter_args=""
     if [ -n "$LOG_FILTER" ]; then
         filter_args="-s $LOG_FILTER"
     fi
-    
+
     # Collect logs
     echo -e "${BLUE}Logcat output:${NC}"
     echo -e "${CYAN}─────────────────────────────────────────${NC}"
+    # shellcheck disable=SC2086
     backend_logcat -d $filter_args
-    
+
     backend_cleanup
 }
 
@@ -368,35 +375,38 @@ cmd_logs() {
 cmd_capture() {
     echo -e "${BLUE}=== Capturing Screenshots ===${NC}"
     echo ""
-    
+
     # Need Android SDK if building
     if [ "$SKIP_BUILD" = false ]; then
         find_android_sdk
     fi
-    
+
     # Initialize backend
     local backend_args="--target $TARGET"
     [ -n "$SERIAL" ] && backend_args="$backend_args --serial $SERIAL"
+    # shellcheck disable=SC2086
     backend_init $backend_args || exit $?
-    
+
     local info
     info=$(backend_get_info)
-    local model=$(echo "$info" | grep "^model=" | cut -d= -f2)
-    local serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
-    
+    local model serial
+    model=$(echo "$info" | grep "^model=" | cut -d= -f2)
+    serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
+
     echo -e "Target: ${GREEN}$model${NC} ($serial)"
     echo ""
-    
+
     # Create output directory
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     local output_dir="$SCRIPT_DIR/captures/$timestamp"
     local light_dir="$output_dir/screenshots"
     local dark_dir="$output_dir/screenshots-dark"
     mkdir -p "$light_dir" "$dark_dir"
-    
+
     echo "Output: $output_dir"
     echo ""
-    
+
     # Build and install (unless --skip-build)
     if [ "$SKIP_BUILD" = false ]; then
         # Build
@@ -414,7 +424,7 @@ cmd_capture() {
             echo -e "  ${GREEN}✓${NC} APKs built"
         fi
         echo ""
-        
+
         # Install
         local app_apk
         if [ "$BUILD_RELEASE" = true ]; then
@@ -423,17 +433,17 @@ cmd_capture() {
             app_apk="$SCRIPT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
         fi
         local test_apk="$SCRIPT_DIR/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-        
+
         if [ ! -f "$app_apk" ]; then
             echo -e "${RED}ERROR: App APK not found after build${NC}"
             echo "APK path: $app_apk"
             exit 1
         fi
-        
+
         echo -e "${BLUE}Installing APKs...${NC}"
         backend_install_apk "$app_apk" | grep -v "^Performing" || true
         echo -e "  ${GREEN}✓${NC} App installed ($( [ "$BUILD_RELEASE" = true ] && echo "release" || echo "debug" ))"
-        
+
         if [ "$BUILD_RELEASE" = false ] && [ -f "$test_apk" ]; then
             backend_install_apk "$test_apk" | grep -v "^Performing" || true
             echo -e "  ${GREEN}✓${NC} Test APK installed"
@@ -442,7 +452,7 @@ cmd_capture() {
     else
         echo -e "${YELLOW}Skipping build (--skip-build)${NC}"
         echo ""
-        
+
         # Verify app is installed
         if ! backend_app_installed; then
             echo -e "${RED}ERROR: App not installed${NC}"
@@ -450,27 +460,27 @@ cmd_capture() {
             exit 1
         fi
     fi
-    
+
     # Run capture flow
     local count=0
-    
+
     run_capture_flow() {
         local mode="$1"
         local output_dir="$2"
-        
+
         echo ""
         echo -e "${BLUE}=== $mode Mode: Main Flow ===${NC}"
-        
+
         # Restart app
         echo -e "  ${YELLOW}Restarting app...${NC}"
         backend_restart_app
-        
+
         # Screenshot 01: Empty search
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_initial_state.png${NC}... "
         backend_screenshot "initial_state" "$output_dir/$(printf '%02d' $count)_initial_state.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 02: Search "hello" + results
         echo -e "  ${YELLOW}Searching 'hello'...${NC}"
         backend_tap_search
@@ -479,42 +489,42 @@ cmd_capture() {
         backend_wait 1.5
         backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
         backend_wait 0.8
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_results.png${NC}... "
         backend_screenshot "search_results" "$output_dir/$(printf '%02d' $count)_search_results.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 03: View hello definition
         echo -e "  ${YELLOW}Opening hello definition...${NC}"
         backend_tap_first_result
         backend_wait 2
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_hello.png${NC}... "
         backend_screenshot "definition_hello" "$output_dir/$(printf '%02d' $count)_definition_hello.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 03b: Scroll to show definitions with examples
         echo -e "  ${YELLOW}Scrolling to definitions...${NC}"
         backend_swipe_up
         backend_wait 0.5
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)b_hello_definitions.png${NC}... "
         backend_screenshot "hello_definitions" "$output_dir/$(printf '%02d' $count)b_hello_definitions.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 04: Navigate back
         echo -e "  ${YELLOW}Going back...${NC}"
         backend_back
         backend_wait 0.8
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_back_to_results.png${NC}... "
         backend_screenshot "back_to_results" "$output_dir/$(printf '%02d' $count)_back_to_results.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 05: Search for "apple"
         echo -e "  ${YELLOW}Searching 'apple'...${NC}"
         backend_tap_search
@@ -524,42 +534,42 @@ cmd_capture() {
         backend_wait 1.5
         backend_key KEYCODE_ESCAPE 2>/dev/null || backend_key KEYCODE_BACK
         backend_wait 0.8
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_search_apple.png${NC}... "
         backend_screenshot "search_apple" "$output_dir/$(printf '%02d' $count)_search_apple.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 06: View apple definition
         echo -e "  ${YELLOW}Opening apple definition...${NC}"
         backend_tap_first_result
         backend_wait 2
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_definition_apple.png${NC}... "
         backend_screenshot "definition_apple" "$output_dir/$(printf '%02d' $count)_definition_apple.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 06b: Scroll to show definitions
         echo -e "  ${YELLOW}Scrolling to definitions...${NC}"
         backend_swipe_up
         backend_wait 0.5
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)b_apple_definitions.png${NC}... "
         backend_screenshot "apple_definitions" "$output_dir/$(printf '%02d' $count)b_apple_definitions.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 06c: Scroll to show translations (if present)
         echo -e "  ${YELLOW}Scrolling to translations...${NC}"
         backend_swipe_up
         backend_wait 0.5
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)c_apple_translations.png${NC}... "
         backend_screenshot "apple_translations" "$output_dir/$(printf '%02d' $count)c_apple_translations.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Screenshot 07: Show no results case
         echo -e "  ${YELLOW}Testing no results...${NC}"
         backend_back
@@ -569,18 +579,18 @@ cmd_capture() {
         backend_clear_text
         backend_type "xyznotfound"
         backend_wait 1.5
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}$(printf '%02d' $count)_no_results.png${NC}... "
         backend_screenshot "no_results" "$output_dir/$(printf '%02d' $count)_no_results.png"
         echo -e "${GREEN}done${NC}"
-        
+
         echo -e "  ${GREEN}Main flow: $count screenshots${NC}"
-        
+
         # === OUTLIER CASES ===
         echo ""
         echo -e "${BLUE}=== $mode Mode: Edge Cases ===${NC}"
-        
+
         # Outlier 01: Long etymology (blizzard)
         echo -e "  ${YELLOW}Testing long etymology (blizzard)...${NC}"
         backend_tap_search
@@ -592,19 +602,19 @@ cmd_capture() {
         backend_wait 0.8
         backend_tap_first_result
         backend_wait 2
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_long_etymology.png${NC}... "
         backend_screenshot "long_etymology" "$output_dir/outlier_$(printf '%02d' $count)_long_etymology.png"
         echo -e "${GREEN}done${NC}"
-        
+
         backend_swipe_up
         backend_wait 0.5
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_definitions.png${NC}... "
         backend_screenshot "blizzard_definitions" "$output_dir/outlier_$(printf '%02d' $count)_definitions.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Outlier 03: Many definitions (draw)
         echo -e "  ${YELLOW}Testing many definitions (draw)...${NC}"
         backend_back
@@ -618,26 +628,26 @@ cmd_capture() {
         backend_wait 0.8
         backend_tap_first_result
         backend_wait 2
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_many_definitions.png${NC}... "
         backend_screenshot "many_definitions" "$output_dir/outlier_$(printf '%02d' $count)_many_definitions.png"
         echo -e "${GREEN}done${NC}"
-        
+
         backend_swipe_up
         backend_wait 0.5
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_draw_mid.png${NC}... "
         backend_screenshot "draw_definitions_mid" "$output_dir/outlier_$(printf '%02d' $count)_draw_mid.png"
         echo -e "${GREEN}done${NC}"
-        
+
         backend_swipe_up
         backend_wait 0.5
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_draw_end.png${NC}... "
         backend_screenshot "draw_definitions_end" "$output_dir/outlier_$(printf '%02d' $count)_draw_end.png"
         echo -e "${GREEN}done${NC}"
-        
+
         # Outlier 04: Long definition text (parados)
         echo -e "  ${YELLOW}Testing long definition (parados)...${NC}"
         backend_back
@@ -651,59 +661,59 @@ cmd_capture() {
         backend_wait 0.8
         backend_tap_first_result
         backend_wait 2
-        
+
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_long_definition.png${NC}... "
         backend_screenshot "long_definition" "$output_dir/outlier_$(printf '%02d' $count)_long_definition.png"
         echo -e "${GREEN}done${NC}"
-        
+
         backend_swipe_up
         backend_wait 0.5
         count=$((count + 1))
         echo -ne "  📸 ${CYAN}outlier_$(printf '%02d' $count)_scrolled.png${NC}... "
         backend_screenshot "long_definition_scrolled" "$output_dir/outlier_$(printf '%02d' $count)_scrolled.png"
         echo -e "${GREEN}done${NC}"
-        
+
         echo -e "  ${GREEN}Total screenshots: $count${NC}"
     }
-    
+
     # Light mode
     backend_dark_mode no
     count=0
     run_capture_flow "Light" "$light_dir"
-    
+
     # Dark mode
     if [ "$SKIP_DARK" = false ]; then
         backend_dark_mode yes
         backend_wait 2
         count=0
         run_capture_flow "Dark" "$dark_dir"
-        
+
         # Restore light mode
         backend_dark_mode no
     fi
-    
+
     # Generate HTML viewer (reuse from capture-device-auto.sh)
     echo ""
     echo -e "${BLUE}Generating HTML viewer...${NC}"
     generate_html_viewer "$output_dir" "$light_dir" "$dark_dir" "$model" "$timestamp"
-    
+
     # Create symlink to latest
     rm -f "$SCRIPT_DIR/captures/latest" 2>/dev/null || true
     ln -sf "$(basename "$output_dir")" "$SCRIPT_DIR/captures/latest"
-    
+
     echo ""
     echo -e "${GREEN}=== Capture Complete ===${NC}"
     echo ""
     echo "Screenshots saved to: $output_dir"
     echo ""
-    ls -la "$light_dir"/*.png 2>/dev/null | wc -l | xargs -I {} echo "Light mode: {} screenshots"
+    find "$light_dir" -maxdepth 1 -name "*.png" 2>/dev/null | wc -l | xargs -I {} echo "Light mode: {} screenshots"
     if [ "$SKIP_DARK" = false ]; then
-        ls -la "$dark_dir"/*.png 2>/dev/null | wc -l | xargs -I {} echo "Dark mode:  {} screenshots"
+        find "$dark_dir" -maxdepth 1 -name "*.png" 2>/dev/null | wc -l | xargs -I {} echo "Dark mode:  {} screenshots"
     fi
     echo ""
     echo -e "View: ${CYAN}file://$output_dir/index.html${NC}"
-    
+
     backend_cleanup
 }
 
@@ -714,17 +724,17 @@ generate_html_viewer() {
     local dark_dir="$3"
     local device_model="$4"
     local timestamp="$5"
-    
+
     local html_file="$output_dir/index.html"
     local has_video="false"
     [ -f "$output_dir/app-flow.mp4" ] && has_video="true"
-    
+
     # Get device info for display
     local device_html=""
     if [ -n "$device_model" ] && [ "$device_model" != "unknown" ]; then
         device_html="<div class=\"device\">$device_model</div>"
     fi
-    
+
     # Get git commit info
     local commit_hash=""
     local commit_html=""
@@ -735,18 +745,20 @@ generate_html_viewer() {
             if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
                 commit_hash="${commit_hash}+"
             fi
-            
+
             # Try to get GitHub URL for linking
-            local remote_url=$(git remote get-url origin 2>/dev/null || echo "")
-            local github_url=""
+            local remote_url github_url
+            remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+            github_url=""
             if echo "$remote_url" | grep -qE 'github\.com[:/]'; then
                 # Extract owner/repo using sed (more portable than bash regex)
-                local owner_repo=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]([^/]+)/([^/]+).*|\1/\2|' | sed 's/\.git$//')
+                local owner_repo
+                owner_repo=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]([^/]+)/([^/]+).*|\1/\2|' | sed 's/\.git$//')
                 local owner="${owner_repo%%/*}"
                 local repo="${owner_repo##*/}"
                 github_url="https://github.com/$owner/$repo/commit/${commit_hash%+}"
             fi
-            
+
             if [ -n "$github_url" ]; then
                 commit_html="<div class=\"commit\"><a href=\"$github_url\" target=\"_blank\" rel=\"noopener\">commit: $commit_hash</a></div>"
             else
@@ -754,7 +766,7 @@ generate_html_viewer() {
             fi
         fi
     fi
-    
+
     # Format timestamp for display (e.g., "Jan 21, 2026 at 1:32 PM")
     # timestamp format: YYYYMMDD_HHMMSS
     local year=${timestamp:0:4}
@@ -762,7 +774,7 @@ generate_html_viewer() {
     local day=${timestamp:6:2}
     local hour=${timestamp:9:2}
     local min=${timestamp:11:2}
-    
+
     # Convert month number to name
     local month_name
     case "$month" in
@@ -771,7 +783,7 @@ generate_html_viewer() {
         07) month_name="Jul" ;; 08) month_name="Aug" ;; 09) month_name="Sep" ;;
         10) month_name="Oct" ;; 11) month_name="Nov" ;; 12) month_name="Dec" ;;
     esac
-    
+
     # Convert to 12-hour format with AM/PM
     local hour_num=$((10#$hour))
     local ampm="AM"
@@ -780,12 +792,12 @@ generate_html_viewer() {
         [ $hour_num -gt 12 ] && hour_num=$((hour_num - 12))
     fi
     [ $hour_num -eq 0 ] && hour_num=12
-    
+
     # Remove leading zero from day
     local day_num=$((10#$day))
-    
+
     local display_ts="$month_name $day_num, $year at $hour_num:$min $ampm"
-    
+
     # Check if dark screenshots exist
     local has_dark="false"
     if [ -d "$dark_dir" ] && ls "$dark_dir"/*.png &>/dev/null; then
@@ -799,8 +811,10 @@ generate_html_viewer() {
     local has_edge_many=false
     local has_edge_missing=false
     if [ -d "$light_dir" ]; then
-        for img in $(ls -1 "$light_dir"/*.png 2>/dev/null); do
-            local fname=$(basename "$img" .png)
+        for img in "$light_dir"/*.png; do
+            [ -e "$img" ] || continue
+            local fname
+            fname=$(basename "$img" .png)
             case "$fname" in
                 01_*|02_*|05_*|06_*|10_*) has_search=true ;;
                 03_*|04b_*|07_*|08b_*|09c_*) has_definition=true ;;
@@ -1149,11 +1163,13 @@ HTMLCARD
     declare -a search_files=() definition_files=() edge_long_files=() edge_many_files=() edge_missing_files=()
 
     if [ -d "$light_dir" ]; then
-        for img in $(ls -1 "$light_dir"/*.png 2>/dev/null | sort); do
+        for img in "$light_dir"/*.png; do
+            [ -e "$img" ] || continue
             found_screenshots=true
-            local filename=$(basename "$img")
-            local fname=$(basename "$img" .png)
-            local label=$(echo "$fname" | sed 's/^outlier_[0-9]*[a-z]*_//;s/^[0-9]*[a-z]*_//;s/_/ /g')
+            local filename fname label
+            filename=$(basename "$img")
+            fname=$(basename "$img" .png)
+            label=$(echo "$fname" | sed 's/^outlier_[0-9]*[a-z]*_//;s/^[0-9]*[a-z]*_//;s/_/ /g')
 
             case "$fname" in
                 # Main flow - Search section
@@ -1266,7 +1282,7 @@ HTMLVIDEO
     # Close main content and add lightbox + script
     cat >> "$html_file" << 'HTMLEND'
     </main>
-    
+
     <div class="lightbox" id="lightbox">
         <span class="close" onclick="closeLightbox()">&times;</span>
         <span class="nav prev" onclick="navigate(-1)">&#10094;</span>
@@ -1274,7 +1290,7 @@ HTMLVIDEO
         <img id="lightbox-img" src="" alt="">
         <div class="caption" id="lightbox-caption"></div>
     </div>
-    
+
     <script>
         let darkMode = false;
         let currentIndex = 0;
@@ -1296,7 +1312,7 @@ HTMLVIDEO
                 updateLightbox();
             }
         }
-        
+
         function openLightbox(card) {
             const images = getVisibleImages();
             const cls = darkMode ? 'img-dark' : 'img-light';
@@ -1306,18 +1322,18 @@ HTMLVIDEO
             document.getElementById('lightbox').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
-        
+
         function closeLightbox() {
             document.getElementById('lightbox').classList.remove('active');
             document.body.style.overflow = '';
         }
-        
+
         function navigate(dir) {
             const images = getVisibleImages();
             currentIndex = (currentIndex + dir + images.length) % images.length;
             updateLightbox();
         }
-        
+
         function updateLightbox() {
             const images = getVisibleImages();
             if (images[currentIndex]) {
@@ -1329,7 +1345,7 @@ HTMLVIDEO
         // Highlight active sidebar link on scroll
         const sections = document.querySelectorAll('.capture-section');
         const navLinks = document.querySelectorAll('.sidebar-nav a');
-        
+
         function updateActiveNav() {
             let current = '';
             sections.forEach(section => {
@@ -1342,17 +1358,17 @@ HTMLVIDEO
                 link.classList.toggle('active', link.getAttribute('href') === '#' + current);
             });
         }
-        
+
         window.addEventListener('scroll', updateActiveNav);
         updateActiveNav();
-        
+
         document.addEventListener('keydown', (e) => {
             if (!document.getElementById('lightbox').classList.contains('active')) return;
             if (e.key === 'Escape') closeLightbox();
             if (e.key === 'ArrowLeft') navigate(-1);
             if (e.key === 'ArrowRight') navigate(1);
         });
-        
+
         document.getElementById('lightbox').addEventListener('click', (e) => {
             if (e.target.id === 'lightbox') closeLightbox();
         });
@@ -1376,38 +1392,40 @@ HTMLEND
 cmd_test() {
     local build_type="debug"
     [ "$BUILD_RELEASE" = true ] && build_type="release"
-    
+
     echo -e "${BLUE}=== Running Tests ($build_type) ===${NC}"
     echo ""
-    
+
     # Initialize backend
     local backend_args="--target $TARGET"
     [ -n "$SERIAL" ] && backend_args="$backend_args --serial $SERIAL"
+    # shellcheck disable=SC2086
     backend_init $backend_args || exit $?
-    
+
     local info
     info=$(backend_get_info)
-    local model=$(echo "$info" | grep "^model=" | cut -d= -f2)
-    local serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
-    
+    local model serial
+    model=$(echo "$info" | grep "^model=" | cut -d= -f2)
+    serial=$(echo "$info" | grep "^serial=" | cut -d= -f2)
+
     echo -e "Target: ${GREEN}$model${NC} ($serial)"
     echo -e "Build:  ${GREEN}$build_type${NC}"
     echo ""
-    
+
     # Check if test APK is installed
     if ! backend_app_installed "org.example.dictapp.test"; then
         echo -e "${RED}ERROR: Test APK not installed${NC}"
         echo "Run: $0 install --target $TARGET$( [ "$BUILD_RELEASE" = true ] && echo " --release" )"
         exit 1
     fi
-    
+
     # Check if app is installed
     if ! backend_app_installed "org.example.dictapp"; then
         echo -e "${RED}ERROR: App not installed${NC}"
         echo "Run: $0 install --target $TARGET$( [ "$BUILD_RELEASE" = true ] && echo " --release" )"
         exit 1
     fi
-    
+
     # Warn about potential signing issues with release builds
     if [ "$BUILD_RELEASE" = true ]; then
         echo -e "${YELLOW}Note: Testing release build (R8/ProGuard enabled).${NC}"
@@ -1416,21 +1434,22 @@ cmd_test() {
         echo -e "${YELLOW}is configured, or use 'capture --release' for smoke testing.${NC}"
         echo ""
     fi
-    
+
     # Determine test to run
     local test_arg=""
     if [ -n "$TEST_CLASS" ]; then
         test_arg="-e class org.example.dictapp.$TEST_CLASS"
     fi
-    
+
     # Run tests via adb
     echo -e "${BLUE}Running instrumentation tests...${NC}"
     echo ""
     backend_logcat_clear
-    
+
+    # shellcheck disable=SC2086
     $BACKEND_ADB -s "$BACKEND_SERIAL" shell am instrument -w $test_arg \
         org.example.dictapp.test/androidx.test.runner.AndroidJUnitRunner
-    
+
     backend_cleanup
 }
 
@@ -1440,23 +1459,23 @@ cmd_test() {
 cmd_clean() {
     echo -e "${BLUE}=== Cleaning ===${NC}"
     echo ""
-    
+
     echo -e "${BLUE}Cleaning Android build...${NC}"
     cd android
     ./gradlew clean --quiet
     cd ..
     echo -e "  ${GREEN}✓${NC} Android build cleaned"
-    
+
     echo -e "${BLUE}Cleaning native build...${NC}"
     cd core
     cargo clean --quiet
     cd ..
     echo -e "  ${GREEN}✓${NC} Native build cleaned"
-    
+
     echo -e "${BLUE}Removing jniLibs...${NC}"
     rm -rf android/app/src/main/jniLibs
     echo -e "  ${GREEN}✓${NC} jniLibs removed"
-    
+
     echo ""
     echo -e "${GREEN}Clean complete!${NC}"
 }
