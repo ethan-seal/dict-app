@@ -516,6 +516,58 @@ backend_logcat() {
     $BACKEND_ADB -s "$BACKEND_SERIAL" logcat "$@"
 }
 
+# Ensure dictionary database is ready.
+# If the download screen is visible, taps the download button and waits for
+# the search screen to appear (EditText visible). No-op if already downloaded.
+# Usage: backend_ensure_db_ready [timeout_seconds]
+backend_ensure_db_ready() {
+    backend_check_init || return $?
+    local timeout="${1:-300}"
+
+    # Dump UI and check for download screen
+    $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /sdcard/ui_dump.xml >/dev/null 2>&1
+    local ui_dump
+    ui_dump=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell cat /sdcard/ui_dump.xml 2>/dev/null)
+
+    # If search field already present, nothing to do
+    if echo "$ui_dump" | grep -q 'EditText'; then
+        return 0
+    fi
+
+    # Check for download screen
+    if ! echo "$ui_dump" | grep -qi 'Download'; then
+        return 0
+    fi
+
+    echo "  Dictionary not downloaded — tapping download button..."
+    if ! backend_tap_text "Download English"; then
+        # Fallback: tap the large button in the lower third of the screen
+        backend_tap $((BACKEND_SCREEN_W / 2)) $((BACKEND_SCREEN_H * 3 / 4))
+    fi
+
+    # Poll until the search screen appears (EditText visible) or timeout
+    local elapsed=0
+    local interval=3
+    while [ "$elapsed" -lt "$timeout" ]; do
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+
+        $BACKEND_ADB -s "$BACKEND_SERIAL" shell uiautomator dump /sdcard/ui_dump.xml >/dev/null 2>&1
+        local dump
+        dump=$($BACKEND_ADB -s "$BACKEND_SERIAL" shell cat /sdcard/ui_dump.xml 2>/dev/null)
+
+        if echo "$dump" | grep -q 'EditText'; then
+            echo "  Dictionary ready (${elapsed}s)"
+            return 0
+        fi
+
+        echo "  Downloading... ${elapsed}s elapsed"
+    done
+
+    echo "backend_ensure_db_ready: timed out after ${timeout}s" >&2
+    return 1
+}
+
 # Cleanup
 backend_cleanup() {
     # Remove temp files

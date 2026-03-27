@@ -474,6 +474,7 @@ cmd_capture() {
         # Restart app
         echo -e "  ${YELLOW}Restarting app...${NC}"
         backend_restart_app
+        backend_ensure_db_ready
 
         # Screenshot 01: Empty search
         count=$((count + 1))
